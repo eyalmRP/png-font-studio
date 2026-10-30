@@ -1,6 +1,6 @@
 // Font model. Units are "font units" = glyph image pixels × glyph.scale; y grows downward in images,
 // metrics are distances from the baseline (ascender/capHeight/xHeight up, descender down, all positive).
-import { charCategory, CAP_REF, X_REF, ASC_REF, DESC_REF } from './charsets.js';
+import { charCategory, CAP_REF, X_REF, ASC_REF, DESC_REF, SIZE_GROUPS } from './charsets.js';
 import { alphaSignature, signatureDistance } from './image.js';
 
 let uid = 0;
@@ -78,6 +78,33 @@ export function measureFont(font) {
   return { capHeight: Math.round(capHeight), xHeight: Math.round(xHeight) };
 }
 
+/**
+ * Even out glyph sizes inside each size group: glyphs whose height differs from the group median by more than
+ * `tolerance` get a scale that brings them to the median. Only glyph.scale changes; pixels stay untouched.
+ * Returns the list of changes [{ char, from, to }].
+ */
+export function normalizeSizes(font, { tolerance = 0.05, groups = SIZE_GROUPS, reset = true } = {}) {
+  const changes = [];
+  for (const grp of groups) {
+    const gs = grp.chars.map((c) => font.glyphs.get(c)).filter((g) => g && g.image);
+    if (gs.length < 3) continue;
+    if (reset) for (const g of gs) if (g.autoScale) { g.scale = 1; }
+    const target = median(gs.map((g) => g.image.height * g.scale));
+    for (const g of gs) {
+      const hgt = g.image.height * g.scale;
+      if (Math.abs(hgt / target - 1) > tolerance) {
+        const from = g.scale;
+        g.scale = +(target / g.image.height).toFixed(4);
+        g.autoScale = true;
+        g.rev++;
+        changes.push({ char: g.char, from, to: g.scale });
+      }
+    }
+  }
+  touch(font);
+  return changes;
+}
+
 /** Place every auto-baseline glyph according to its category, then derive font metrics. */
 export function autoMetrics(font, { force = false } = {}) {
   const { capHeight, xHeight } = measureFont(font);
@@ -96,7 +123,7 @@ export function autoMetrics(font, { force = false } = {}) {
       case 'cap': top = capHeight; break;
       case 'math': top = mathAxis + h / 2; break;
       case 'center': top = capHeight / 2 + h / 2; break;
-      case 'under': top = -capHeight * 0.06; break;
+      case 'under': top = -capHeight * 0.015; break;
       case 'base-desc': top = Math.min(h, capHeight); break;
       default: top = h;
     }
@@ -287,7 +314,7 @@ export function fontToJSON(font) {
       file: g.image ? `glyphs/${[...g.char].map((c) => c.codePointAt(0).toString(16).padStart(4, '0')).join('_')}.png` : null,
       w: g.image ? g.image.width : 0,
       h: g.image ? g.image.height : 0,
-      lsb: g.lsb, rsb: g.rsb, baseline: +g.baseline.toFixed(3), scale: g.scale, autoBaseline: g.autoBaseline,
+      lsb: g.lsb, rsb: g.rsb, baseline: +g.baseline.toFixed(3), scale: g.scale, autoBaseline: g.autoBaseline, autoScale: !!g.autoScale,
     });
   }
   return {
@@ -309,7 +336,7 @@ export function fontFromJSON(json, images) {
   });
   for (const gj of json.glyphs || []) {
     const image = gj.file ? images.get(gj.file) || null : null;
-    const g = createGlyph(gj.char, image, { lsb: gj.lsb || 0, rsb: gj.rsb || 0, baseline: gj.baseline ?? (image ? image.height : 0), scale: gj.scale || 1, autoBaseline: gj.autoBaseline !== false });
+    const g = createGlyph(gj.char, image, { lsb: gj.lsb || 0, rsb: gj.rsb || 0, baseline: gj.baseline ?? (image ? image.height : 0), scale: gj.scale || 1, autoBaseline: gj.autoBaseline !== false, autoScale: !!gj.autoScale });
     font.glyphs.set(gj.char, g);
   }
   return font;

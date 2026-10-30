@@ -83,3 +83,14 @@ export function charLabel(ch) {
   const cp = ch.codePointAt(0);
   return `U+${cp.toString(16).toUpperCase().padStart(4, '0')}`;
 }
+
+/** Groups whose members should share a height (used to even out sheets where every cell was scaled to fit). */
+export const SIZE_GROUPS = [
+  { id: 'caps', chars: [...'ABCDEFGHIJKLMNOPQRSTUVWXYZ'] },
+  { id: 'xheight', chars: [...'acemnorsuvwxz'] },
+  { id: 'ascender', chars: [...'bdfhklt'] },
+  { id: 'descender', chars: [...'gpqy'] },
+  { id: 'digits', chars: [...'0123456789'] },
+  { id: 'hebrew', chars: [...'אבגדהוזחטכמנסעפצרשתם'] },
+  { id: 'hebrewDesc', chars: [...'קךןףץ'] },
+];

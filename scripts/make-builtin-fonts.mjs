@@ -4,7 +4,7 @@ import path from 'node:path';
 import { readPNG, encodePNG, decodePNG } from './lib/png-node.mjs';
 import { detectGrid, sliceCells, processCell } from '../src/core/image.js';
 import { LAYOUTS } from '../src/core/charsets.js';
-import { createFont, setGlyph, autoMetrics, fontToJSON, rankLayouts } from '../src/core/font.js';
+import { createFont, setGlyph, autoMetrics, fontToJSON, rankLayouts, normalizeSizes } from '../src/core/font.js';
 import { zipSync } from '../src/core/zip.js';
 
 const root = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
@@ -39,6 +39,8 @@ function buildFont(name, variant, sheets, refFont) {
       setGlyph(font, ch, c.image);
     });
   }
+  const changes = normalizeSizes(font);
+  console.log('  evened sizes:', changes.map((c) => `${c.char}×${c.to.toFixed(2)}`).join(' '));
   autoMetrics(font);
   return font;
 }

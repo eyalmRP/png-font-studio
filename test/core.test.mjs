@@ -95,9 +95,9 @@ test('animation: in-preset hides before start and rests after', () => {
   const L = layoutDoc(doc, { getFont });
   const anim = { ...DEFAULT_ANIM, in: { ...DEFAULT_ANIM.in, preset: 'popBounce' } };
   const a = evaluate(anim, L.items, L, 0);
-  assert.equal(a.transforms[0].sx, 0);
+  assert.equal(a.transforms[0].ops[0].sx, 0);
   const b = evaluate(anim, L.items, L, 3);
-  assert.equal(b.transforms[2].sx, 1);
+  assert.equal(b.transforms[2].ops.length, 0);
   assert.equal(b.transforms[2].opacity, 1);
 });
 
@@ -132,4 +132,12 @@ test('remap swaps and duplicate copies', () => {
   const d = duplicateGlyph(f, 'A', 'Å');
   assert.notEqual(d.image.data, f.glyphs.get('A').image.data);
   f.glyphs.delete('Å');
+});
+
+test('size groups are even after normalisation (r matches n)', () => {
+  const h = (c) => { const g = font.glyphs.get(c); return g.image.height * g.scale; };
+  const xh = [...'acemnorsuvwxz'].map(h);
+  const med = [...xh].sort((a, b) => a - b)[6];
+  for (const v of xh) assert.ok(Math.abs(v / med - 1) <= 0.051, `x-height spread ${v} vs ${med}`);
+  assert.ok(Math.abs(h('r') - h('n')) < 10);
 });

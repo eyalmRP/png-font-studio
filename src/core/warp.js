@@ -199,3 +199,24 @@ export function pathPlacer(warp, width, size) {
     default: return (x, up) => ({ x, y: -up, rot: 0 });
   }
 }
+
+/** Warp a local point relative to the static text frame {x, y, w, h}. */
+export function warpLocal(frame, warp, x, y) {
+  const half = Math.max(1, frame.w / 2), cx = frame.x + frame.w / 2, cy = frame.y + frame.h / 2;
+  const a = Math.max(0.02, frame.h / Math.max(1, frame.w));
+  const [u, v] = warpPoint(warp.style, (x - cx) / half, (y - cy) / half, a, warp);
+  return [cx + u * half, cy + v * half];
+}
+
+/** Mesh over a local rect for inverse lookups (hit testing on warped text). */
+export function localMesh(frame, warp, rect, cols = 48, rows = 16) {
+  const src = new Float32Array((cols + 1) * (rows + 1) * 2), dst = new Float32Array(src.length);
+  for (let r = 0; r <= rows; r++) for (let c = 0; c <= cols; c++) {
+    const i = (r * (cols + 1) + c) * 2;
+    const x = rect.x + (c / cols) * rect.w, y = rect.y + (r / rows) * rect.h;
+    src[i] = x; src[i + 1] = y;
+    const [wx, wy] = warpLocal(frame, warp, x, y);
+    dst[i] = wx; dst[i + 1] = wy;
+  }
+  return { cols, rows, src, dst };
+}

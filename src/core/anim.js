@@ -46,17 +46,17 @@ const R = (min, max) => ['rand', min, max];
 export const IN_PRESETS = {
   // cute
   popBounce: { cat: 'cute', unit: 'char', stagger: 0.04, duration: 0.6, keys: [{ t: 0, sx: 0, sy: 0, opacity: 0 }, { t: 0.55, sx: 1.25, sy: 1.25, opacity: 1, ease: 'outCubic' }, { t: 0.78, sx: 0.9, sy: 0.9, ease: 'inOutQuad' }, { t: 1, sx: 1, sy: 1, ease: 'outQuad' }] },
-  jellyDrop: { cat: 'cute', unit: 'char', stagger: 0.05, duration: 0.8, keys: [{ t: 0, dy: -1.6, sx: 0.8, sy: 1.3, opacity: 0 }, { t: 0.45, dy: 0, sx: 0.8, sy: 1.3, opacity: 1, ease: 'inQuad' }, { t: 0.6, sx: 1.35, sy: 0.65, ease: 'outQuad' }, { t: 0.78, sx: 0.88, sy: 1.12, ease: 'inOutQuad' }, { t: 0.9, sx: 1.06, sy: 0.95, ease: 'inOutQuad' }, { t: 1, sx: 1, sy: 1, ease: 'outQuad' }] },
+  jellyDrop: { cat: 'cute', unit: 'char', pivot: 'bottom', stagger: 0.05, duration: 0.8, keys: [{ t: 0, dy: -1.6, sx: 0.8, sy: 1.3, opacity: 0 }, { t: 0.45, dy: 0, sx: 0.8, sy: 1.3, opacity: 1, ease: 'inQuad' }, { t: 0.6, sx: 1.35, sy: 0.65, ease: 'outQuad' }, { t: 0.78, sx: 0.88, sy: 1.12, ease: 'inOutQuad' }, { t: 0.9, sx: 1.06, sy: 0.95, ease: 'inOutQuad' }, { t: 1, sx: 1, sy: 1, ease: 'outQuad' }] },
   bubbleRise: { cat: 'cute', unit: 'char', stagger: 0.06, duration: 0.9, keys: [{ t: 0, dy: 0.9, sx: 0.2, sy: 0.2, opacity: 0, dx: R(-0.15, 0.15) }, { t: 0.7, dy: -0.12, sx: 1.08, sy: 1.08, opacity: 1, dx: 0, ease: 'outCubic' }, { t: 1, dy: 0, sx: 1, sy: 1, ease: 'inOutQuad' }] },
-  hopIn: { cat: 'cute', unit: 'char', stagger: 0.05, duration: 0.55, keys: [{ t: 0, dy: 0.6, opacity: 0, rot: -12 }, { t: 0.5, dy: -0.35, opacity: 1, rot: 6, ease: 'outQuad' }, { t: 1, dy: 0, rot: 0, ease: 'outBounce' }] },
+  hopIn: { cat: 'cute', unit: 'char', pivot: 'bottom', stagger: 0.05, duration: 0.55, keys: [{ t: 0, dy: 0.6, opacity: 0, rot: -12 }, { t: 0.5, dy: -0.35, opacity: 1, rot: 6, ease: 'outQuad' }, { t: 1, dy: 0, rot: 0, ease: 'outBounce' }] },
   wiggleIn: { cat: 'cute', unit: 'char', stagger: 0.04, duration: 0.7, keys: [{ t: 0, sx: 0.3, sy: 0.3, rot: -30, opacity: 0 }, { t: 0.35, sx: 1.1, sy: 1.1, rot: 18, opacity: 1, ease: 'outQuad' }, { t: 0.6, rot: -10, ease: 'inOutQuad' }, { t: 0.8, rot: 5, sx: 1, sy: 1, ease: 'inOutQuad' }, { t: 1, rot: 0, ease: 'inOutQuad' }] },
   heartbeat: { cat: 'cute', unit: 'char', stagger: 0.03, duration: 0.7, keys: [{ t: 0, sx: 0, sy: 0, opacity: 0 }, { t: 0.3, sx: 1.2, sy: 1.2, opacity: 1, ease: 'outQuad' }, { t: 0.45, sx: 0.95, sy: 0.95 }, { t: 0.6, sx: 1.12, sy: 1.12 }, { t: 1, sx: 1, sy: 1, ease: 'outCubic' }] },
   // cartoony
-  squashDrop: { cat: 'cartoon', unit: 'char', stagger: 0.07, duration: 0.75, keys: [{ t: 0, dy: -3, sy: 1.5, sx: 0.7, opacity: 1 }, { t: 0.5, dy: 0, sy: 1.5, sx: 0.7, ease: 'inQuad' }, { t: 0.62, sy: 0.55, sx: 1.4, ease: 'outQuad' }, { t: 0.8, sy: 1.15, sx: 0.9, dy: -0.15, ease: 'outQuad' }, { t: 1, sy: 1, sx: 1, dy: 0, ease: 'outBounce' }] },
-  rubberBand: { cat: 'cartoon', unit: 'char', stagger: 0.03, duration: 0.9, keys: [{ t: 0, sx: 0, sy: 1, opacity: 0 }, { t: 0.3, sx: 1.4, sy: 0.7, opacity: 1, ease: 'outQuad' }, { t: 0.45, sx: 0.75, sy: 1.25 }, { t: 0.6, sx: 1.15, sy: 0.85 }, { t: 0.75, sx: 0.95, sy: 1.05 }, { t: 1, sx: 1, sy: 1, ease: 'outQuad' }] },
+  squashDrop: { cat: 'cartoon', unit: 'char', pivot: 'bottom', stagger: 0.07, duration: 0.75, keys: [{ t: 0, dy: -3, sy: 1.5, sx: 0.7, opacity: 1 }, { t: 0.5, dy: 0, sy: 1.5, sx: 0.7, ease: 'inQuad' }, { t: 0.62, sy: 0.55, sx: 1.4, ease: 'outQuad' }, { t: 0.8, sy: 1.15, sx: 0.9, dy: -0.15, ease: 'outQuad' }, { t: 1, sy: 1, sx: 1, dy: 0, ease: 'outBounce' }] },
+  rubberBand: { cat: 'cartoon', unit: 'char', pivot: 'bottom', stagger: 0.03, duration: 0.9, keys: [{ t: 0, sx: 0, sy: 1, opacity: 0 }, { t: 0.3, sx: 1.4, sy: 0.7, opacity: 1, ease: 'outQuad' }, { t: 0.45, sx: 0.75, sy: 1.25 }, { t: 0.6, sx: 1.15, sy: 0.85 }, { t: 0.75, sx: 0.95, sy: 1.05 }, { t: 1, sx: 1, sy: 1, ease: 'outQuad' }] },
   spinPop: { cat: 'cartoon', unit: 'char', stagger: 0.05, duration: 0.7, keys: [{ t: 0, sx: 0, sy: 0, rot: -360, opacity: 0 }, { t: 0.75, sx: 1.2, sy: 1.2, rot: 10, opacity: 1, ease: 'outCubic' }, { t: 1, sx: 1, sy: 1, rot: 0, ease: 'outBack' }] },
   slamIn: { cat: 'cartoon', unit: 'char', stagger: 0.06, duration: 0.5, keys: [{ t: 0, sx: 4, sy: 4, opacity: 0, blur: 0.08 }, { t: 0.6, sx: 0.85, sy: 0.85, opacity: 1, blur: 0, ease: 'inQuad' }, { t: 1, sx: 1, sy: 1, ease: 'outBack' }] },
-  boing: { cat: 'cartoon', unit: 'char', stagger: 0.04, duration: 1, keys: [{ t: 0, dy: 1.2, sy: 0.3, opacity: 0 }, { t: 0.3, dy: -0.6, sy: 1.4, sx: 0.8, opacity: 1, ease: 'outQuad' }, { t: 0.55, dy: 0, sy: 0.75, sx: 1.2, ease: 'inQuad' }, { t: 0.75, dy: -0.15, sy: 1.08, sx: 0.95, ease: 'outQuad' }, { t: 1, dy: 0, sy: 1, sx: 1, ease: 'outBounce' }] },
+  boing: { cat: 'cartoon', unit: 'char', pivot: 'bottom', stagger: 0.04, duration: 1, keys: [{ t: 0, dy: 1.2, sy: 0.3, opacity: 0 }, { t: 0.3, dy: -0.6, sy: 1.4, sx: 0.8, opacity: 1, ease: 'outQuad' }, { t: 0.55, dy: 0, sy: 0.75, sx: 1.2, ease: 'inQuad' }, { t: 0.75, dy: -0.15, sy: 1.08, sx: 0.95, ease: 'outQuad' }, { t: 1, dy: 0, sy: 1, sx: 1, ease: 'outBounce' }] },
   tumbleIn: { cat: 'cartoon', unit: 'char', stagger: 0.05, duration: 0.8, keys: [{ t: 0, dx: R(-2, 2), dy: -2.5, rot: R(-200, 200), opacity: 0 }, { t: 0.7, dx: 0, dy: 0.05, rot: 8, opacity: 1, ease: 'inQuad' }, { t: 1, dy: 0, rot: 0, ease: 'outBounce' }] },
   // professional
   fadeUp: { cat: 'pro', unit: 'char', stagger: 0.025, duration: 0.6, keys: [{ t: 0, dy: 0.35, opacity: 0 }, { t: 1, dy: 0, opacity: 1, ease: 'outCubic' }] },
@@ -80,7 +80,7 @@ export const OUT_PRESETS = {
   floatAway: { cat: 'cute', unit: 'char', stagger: 0.05, duration: 0.9, keys: [{ t: 0 }, { t: 1, dy: -1.6, dx: R(-0.3, 0.3), sx: 0.5, sy: 0.5, opacity: 0, ease: 'inCubic' }] },
   shrinkWiggle: { cat: 'cute', unit: 'char', stagger: 0.03, duration: 0.6, keys: [{ t: 0 }, { t: 0.3, rot: 15, ease: 'inOutQuad' }, { t: 0.55, rot: -15, sx: 0.8, sy: 0.8 }, { t: 1, rot: 0, sx: 0, sy: 0, opacity: 0, ease: 'inQuad' }] },
   fallDown: { cat: 'cartoon', unit: 'char', stagger: 0.04, duration: 0.9, keys: [{ t: 0 }, { t: 0.2, dy: -0.25, rot: R(-10, 10), ease: 'outQuad' }, { t: 1, dy: 4, rot: R(-120, 120), opacity: 0, ease: 'inQuad' }] },
-  squashOut: { cat: 'cartoon', unit: 'char', stagger: 0.04, duration: 0.6, keys: [{ t: 0 }, { t: 0.35, sx: 1.4, sy: 0.5, ease: 'outQuad' }, { t: 0.55, sx: 0.7, sy: 1.5, dy: -0.4, ease: 'outQuad' }, { t: 1, dy: -3, sx: 0.4, sy: 1.8, opacity: 0, ease: 'inQuad' }] },
+  squashOut: { cat: 'cartoon', unit: 'char', pivot: 'bottom', stagger: 0.04, duration: 0.6, keys: [{ t: 0 }, { t: 0.35, sx: 1.4, sy: 0.5, ease: 'outQuad' }, { t: 0.55, sx: 0.7, sy: 1.5, dy: -0.4, ease: 'outQuad' }, { t: 1, dy: -3, sx: 0.4, sy: 1.8, opacity: 0, ease: 'inQuad' }] },
   explode: { cat: 'cartoon', unit: 'char', stagger: 0, duration: 0.8, keys: [{ t: 0 }, { t: 1, dx: R(-5, 5), dy: R(-4, 4), rot: R(-360, 360), sx: 1.6, sy: 1.6, opacity: 0, ease: 'outCubic' }] },
   fadeDown: { cat: 'pro', unit: 'char', stagger: 0.02, duration: 0.5, keys: [{ t: 0 }, { t: 1, dy: 0.3, opacity: 0, ease: 'inCubic' }] },
   slideOut: { cat: 'pro', unit: 'word', stagger: 0.06, duration: 0.6, keys: [{ t: 0 }, { t: 1, dx: 1.2, opacity: 0, ease: 'inExpo' }] },
@@ -207,16 +207,18 @@ export function phaseLength(cfg, preset, count) {
 export function evaluate(anim, items, layout, time) {
   const a = anim || DEFAULT_ANIM;
   const n = items.length;
-  const out = items.map(() => ({ ...REST }));
-  const res = { transforms: out, visible: true, active: false };
-  if (time < a.start || time > a.end + 1e-6) { res.visible = time >= a.start && time <= a.end; }
+  // per item: scalar effects plus a list of geometric ops, each relative to its animation unit
+  const out = items.map(() => ({ opacity: 1, blur: 0, hue: 0, clip: 1, bright: 0, ops: [] }));
+  const res = { transforms: out, visible: time >= a.start - 1e-6 && time <= a.end + 1e-6, active: false };
   const inP = IN_PRESETS[a.in.preset];
   const outP = OUT_PRESETS[a.out.preset];
   const loopP = LOOP_PRESETS[a.loop.preset];
-  const apply = (target, tr) => {
-    target.dx += tr.dx; target.dy += tr.dy; target.sx *= tr.sx; target.sy *= tr.sy; target.rot += tr.rot;
-    target.opacity *= tr.opacity; target.blur += tr.blur; target.skew += tr.skew; target.hue += tr.hue;
+  const apply = (target, tr, kind, u, pivot) => {
+    target.opacity *= tr.opacity; target.blur += tr.blur; target.hue += tr.hue;
     target.clip = Math.min(target.clip, tr.clip); target.bright += tr.bright;
+    if (tr.dx || tr.dy || tr.sx !== 1 || tr.sy !== 1 || tr.rot || tr.skew) {
+      target.ops.push({ dx: tr.dx, dy: tr.dy, sx: tr.sx, sy: tr.sy, rot: tr.rot, skew: tr.skew, kind, u, pivot: pivot || 'center' });
+    }
   };
   const phase = (preset, cfg, localT, dirOut) => {
     const unit = cfg.unit || preset.unit;
@@ -236,9 +238,7 @@ export function evaluate(anim, items, layout, time) {
         const k = dirOut ? t : 1 - t;
         tr.dx += (u - (count - 1) / 2) * preset.spread * 0.3 * EASE.outCubic(k) * (dirOut ? 1 : 1);
       }
-      if (preset.pivot) tr.pivot = preset.pivot;
-      apply(out[i], tr);
-      if (preset.pivot) out[i].pivot = preset.pivot;
+      apply(out[i], tr, unit, u, preset.pivot);
     }
     res.active = true;
   };
@@ -249,6 +249,7 @@ export function evaluate(anim, items, layout, time) {
     if (lt < inLen + 1e-6) phase(inP, a.in, Math.max(-1e-6, lt), false);
     if (lt < 0) for (const tr of out) tr.opacity = 0;
   }
+  res.inEnd = inP ? a.start + (a.in.delay || 0) + phaseLength(a.in, inP, unitIndex(items, a.in.unit || inP.unit, layout).count) : a.start;
   if (outP) {
     const count = unitIndex(items, a.out.unit || outP.unit, layout).count;
     const outLen = phaseLength(a.out, outP, count);
@@ -258,7 +259,8 @@ export function evaluate(anim, items, layout, time) {
   if (loopP) {
     const { idx, count } = unitIndex(items, loopP.unit, layout);
     const p = { period: a.loop.period || 1.6, amount: a.loop.amount ?? 1 };
-    for (let i = 0; i < n; i++) apply(out[i], { ...REST, ...loopP.fn(t, idx[i], count, p) });
+    for (let i = 0; i < n; i++) apply(out[i], { ...REST, ...loopP.fn(t, idx[i], count, p) }, loopP.unit, idx[i]);
+    res.active = true;
   }
   return res;
 }

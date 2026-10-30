@@ -21,10 +21,12 @@ async function build() {
     const a = ensureAtlas(k);
     const { font, atlas } = JSON.parse(fs.readFileSync(a.json, 'utf8'));
     const webp = fs.readFileSync(a.webp);
-    fs.writeFileSync(path.join(dist, 'artifact/fonts', k + '.json'), JSON.stringify({ font, atlas }));
-    fs.writeFileSync(path.join(dist, 'artifact/fonts', k + '.webp'), webp);
-    // the size drives download progress; the content hash goes on the URLs so a cached older copy is never used
-    fontBytes[k] = { bytes: webp.length, v: crypto.createHash('sha256').update(webp).update(fs.readFileSync(a.json)).digest('hex').slice(0, 10) };
+    // the file names carry a content hash, so a browser never mixes in a cached older copy; the size drives the
+    // download progress
+    const v = crypto.createHash('sha256').update(webp).update(fs.readFileSync(a.json)).digest('hex').slice(0, 10);
+    fs.writeFileSync(path.join(dist, 'artifact/fonts', `${k}.${v}.json`), JSON.stringify({ font, atlas }));
+    fs.writeFileSync(path.join(dist, 'artifact/fonts', `${k}.${v}.webp`), webp);
+    fontBytes[k] = { bytes: webp.length, v };
     embed[k] = { meta: { font, atlas }, webp: webp.toString('base64') };
   }
   const res = await esbuild.build({

@@ -27,8 +27,8 @@ function fromBase64(s) {
   return out;
 }
 
-// the build writes each atlas file's size (for download progress when the server sends no length) and a content
-// hash (added to the URLs so a browser never mixes in a cached older copy)
+// the build writes each atlas file's size (for download progress when the server sends no length) and the content
+// hash in its file names (so a browser never mixes in a cached older copy)
 const FONT_FILES = typeof __PFS_FONT_FILES__ !== 'undefined' ? __PFS_FONT_FILES__ : {};
 
 /** Download with progress (0..1); falls back to a plain read when the size is unknown. */
@@ -59,9 +59,9 @@ async function builtinFont(b, onDownload, onDecode) {
   let meta, bytes;
   if (embedded) { meta = embedded.meta; bytes = fromBase64(embedded.webp); }
   else {
-    const info = FONT_FILES[b.key] || {}, v = info.v ? `?v=${info.v}` : '';
-    meta = await (await fetch(`fonts/${b.key}.json${v}`)).json();
-    bytes = await download(`fonts/${b.key}.webp${v}`, info.bytes, onDownload);
+    const info = FONT_FILES[b.key] || {}, name = info.v ? `${b.key}.${info.v}` : b.key;
+    meta = await (await fetch(`fonts/${name}.json`)).json();
+    bytes = await download(`fonts/${name}.webp`, info.bytes, onDownload);
   }
   onDownload(1);
   return fontFromAtlas(meta, new Blob([bytes], { type: 'image/webp' }), onDecode);

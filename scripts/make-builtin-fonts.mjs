@@ -3,6 +3,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { buildFromSheets, fontZip } from './font-from-sheets.mjs';
+import { shortenL, lFromH } from './glyph-fixups.mjs';
+import { normalizeSizes, autoMetrics } from '../src/core/font.js';
 
 const root = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
 const S = (n) => path.join(root, 'assets/sheets', n);
@@ -18,6 +20,11 @@ export const BUBBLE_SHEETS = [
 
 if (import.meta.url === `file://${process.argv[1]}`) {
   const font = buildFromSheets('Bubble Blue', BUBBLE_SHEETS);
+  // the L's foot reached as far right as E's bottom bar, and the redrawn l was a pill unlike the other stems
+  shortenL(font);
+  lFromH(font);
+  normalizeSizes(font);
+  autoMetrics(font);
   font.family = 'Bubble';
   font.variant = 'Blue';
   const out = path.join(root, 'assets/fonts/bubble-blue.zip');

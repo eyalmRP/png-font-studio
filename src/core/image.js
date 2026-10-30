@@ -692,3 +692,17 @@ export function removeBackgroundColor(img, color, { tolerance = 60, softness = 1
   }
   return out;
 }
+
+// ---------- glyph surgery ----------
+
+/** Remove columns [x0, x0 + n) and close the gap, e.g. to shorten a straight bar without touching its ends. */
+export function cutColumns(img, x0, n) {
+  const { width: W, height: H, data } = img;
+  x0 = Math.max(0, Math.min(W, x0)); n = Math.max(0, Math.min(W - x0, n));
+  const out = createImage(W - n, H);
+  for (let y = 0; y < H; y++) for (let x = 0; x < W - n; x++) {
+    const sx = x < x0 ? x : x + n, si = (y * W + sx) * 4, di = (y * (W - n) + x) * 4;
+    for (let k = 0; k < 4; k++) out.data[di + k] = data[si + k];
+  }
+  return out;
+}

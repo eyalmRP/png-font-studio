@@ -1,5 +1,5 @@
 // Titles mode: layers + artboard (left), stage + animation player (centre), inspector (right).
-import { h, clear, icon } from '../dom.js';
+import { h, clear, icon, storeSet } from '../dom.js';
 import { t, ltr } from '../i18n.js';
 import { section, iconButton, button, numberField, pills, colorField, select, menu } from '../controls.js';
 import { state, on, emit, selectLayer, checkpoint, projectChanged, newTextLayer, selectedLayer } from '../../app/store.js';
@@ -149,12 +149,40 @@ export function mountTitles({ left, right, center, exportSlot, sizes, applySizes
     emit('selection');
   }
 
+  // ---------- still / animated ----------
+  // Still: design and export PNG titles, with no player or animation settings. Animated: entrance, hold and
+  // exit animation and video export. Each title keeps its own choice; new titles start with the last one used.
+  const modePills = pills({
+    class: 'mode-switch', value: state.project.animated === false ? 'still' : 'anim',
+    options: [
+      { value: 'still', icon: 'fileImage', label: t('Still'), title: t('Still: design titles and export PNG images') },
+      { value: 'anim', icon: 'filmStrip', label: t('Animated'), title: t('Animated: add entrance, hold and exit animation, and export video') },
+    ],
+    onChange: (v) => {
+      checkpoint('project', 'Animation mode');
+      state.project.animated = v === 'anim';
+      storeSet('animatedDefault', state.project.animated);
+      applyMode();
+      emit('project', { what: 'mode' });
+    },
+  });
+  function applyMode() {
+    const anim = state.project.animated !== false;
+    modePills.setValue(anim ? 'anim' : 'still');
+    if (!anim) player.stop();
+    player.el.hidden = !anim;
+    center.classList.toggle('with-player', anim);
+    stage.request();
+  }
+
   // ---------- export button ----------
   const exportBtn = button({ label: t('Export'), icon: 'download', kind: 'primary', onClick: () => openExport() });
-  exportSlot.replaceChildren(exportBtn);
+  exportSlot.replaceChildren(modePills, exportBtn);
+  applyMode();
 
   const offs = [
-    on('project', (d) => { if (!d || d.what !== 'transform') renderLayers(); }),
+    // an opened title file brings its own Still / Animated choice
+    on('project', (d) => { if (!d || d.what !== 'transform') renderLayers(); if ((state.project.animated !== false) !== !player.el.hidden) applyMode(); }),
     on('selection', renderLayers),
     on('edit-layer', (id) => { import('../../app/textedit.js').then((m) => { m.enterEdit(id); stage.focusIme(); }); }),
     on('key', (e) => {

@@ -1,7 +1,7 @@
 // The artboard stage: zoom/pan, layer selection and transform handles, text tool, and on-canvas text editing.
-import { h, icon, rafThrottle } from '../dom.js';
+import { h, icon, rafThrottle, storeGet, storeSet } from '../dom.js';
 import { t } from '../i18n.js';
-import { iconButton } from '../controls.js';
+import { iconButton, menu } from '../controls.js';
 import { state, on, emit, selectedLayer, selectLayer, checkpoint, projectChanged, newTextLayer, markLayer, getFont } from '../../app/store.js';
 import { drawLayers, renderLayer, layerMatrix, getLayout, warpPoint, unwarpPoint, layerVisibleAt } from '../../render/layer.js';
 import { caretAt, hitTest, selectionRects, moveVertical, moveHorizontal, lineStartEnd } from '../../core/layout.js';
@@ -21,14 +21,30 @@ export function createStage() {
   toolBtns.hand = iconButton('hand', t('Pan') + ' (H)', () => setTool('hand'));
   const guidesBtn = iconButton('baseline', t('Show text guides while editing'), () => { view.guides = !view.guides; guidesBtn.classList.toggle('on', view.guides); request(); });
   const safeBtn = iconButton('scan', t('Title-safe guides'), () => { state.project.artboard.safe = !state.project.artboard.safe; safeBtn.classList.toggle('on', state.project.artboard.safe); request(); });
+  // preview background: only for looking at the title; exports stay transparent unless the artboard has a colour
+  let stageBg = storeGet('stageBg', 'checker');
+  const showStageBg = () => { bgSwatch.style.background = stageBg === 'checker' ? '' : stageBg; bgBtn.classList.toggle('on', stageBg !== 'checker'); };
+  const setStageBg = (v) => { stageBg = v; storeSet('stageBg', v); showStageBg(); request(); };
+  const bgPicker = h('input', { type: 'color', value: stageBg.startsWith('#') ? stageBg : '#20193a', 'aria-label': t('Custom colour…'), tabIndex: -1, style: { position: 'absolute', width: '1px', height: '1px', opacity: 0, pointerEvents: 'none', insetInlineStart: '50%', top: '40px' }, on: { input: (e) => setStageBg(e.target.value) } });
+  const BG_COLOURS = [['Black', '#000000'], ['Dark grey', '#2b2b2b'], ['Grey', '#808080'], ['White', '#ffffff']];
+  const bgMenu = (anchor) => menu(anchor, [
+    { label: (stageBg === 'checker' ? '✓ ' : '') + t('Checkerboard'), icon: 'grid', onClick: () => setStageBg('checker') },
+    ...BG_COLOURS.map(([name, c]) => ({ label: (stageBg === c ? '✓ ' : '') + t(name), swatch: c, onClick: () => setStageBg(c) })),
+    '-',
+    { label: t('Custom colour…'), icon: 'pipette', onClick: () => { bgPicker.value = stageBg.startsWith('#') ? stageBg : bgPicker.value; bgPicker.click(); } },
+  ]);
+  const bgBtn = iconButton('palette', t('Preview background (only for viewing; exports stay transparent)'), (e) => bgMenu(e.currentTarget));
+  const bgSwatch = h('span.bg-swatch');
+  bgBtn.appendChild(bgSwatch);
   const bar = h('div.stage-bar',
     toolBtns.select, toolBtns.text, toolBtns.hand, h('span.divider', { style: { width: '1px', height: '20px', margin: '0 4px', background: 'var(--line)' } }),
     iconButton('zoomOut', t('Zoom out'), () => zoomBy(1 / 1.25)), zoomLabel, iconButton('zoomIn', t('Zoom in'), () => zoomBy(1.25)),
-    iconButton('fit', t('Fit artboard') + ' (Ctrl+0)', () => fit()), guidesBtn, safeBtn);
+    iconButton('fit', t('Fit artboard') + ' (Ctrl+0)', () => fit()), guidesBtn, safeBtn, bgBtn);
   const hint = h('div.stage-hint');
-  const el = h('div.stage', canvas, ime, bar, hint);
+  const el = h('div.stage', canvas, ime, bar, hint, bgPicker);
   const view = { zoom: 0.5, panX: 0, panY: 0, tool: 'select', guides: true, fitted: false, blink: true, hover: null };
   guidesBtn.classList.add('on');
+  showStageBg();
   let dpr = 1, W = 0, H = 0;
   const offs = [];
 
@@ -65,7 +81,7 @@ export function createStage() {
 
   // ---------- layer geometry for overlays ----------
   function layerContent(layer) {
-    const r = renderLayer(layer, state.time, Math.max(0.05, view.zoom * dpr * Math.max(layer.scaleX, layer.scaleY) / 100), { showMissing: true });
+    const r = renderLayer(layer, state.time, Math.max(0.05, view.zoom * dpr * Math.max(layer.scaleX, layer.scaleY) / 100), { showMissing: true, noAnim: state.project.animated === false });
     return r;
   }
   /** Local rect corners of a layer in screen px. */
@@ -139,6 +155,7 @@ export function createStage() {
     ctx.save();
     ctx.setTransform(base);
     if (ab.bg === 'color') { ctx.fillStyle = ab.bgColor; ctx.fillRect(0, 0, ab.w, ab.h); }
+    else if (stageBg !== 'checker') { ctx.fillStyle = stageBg; ctx.fillRect(0, 0, ab.w, ab.h); }
     else {
       const a = cssVar('--checker-a'), b = cssVar('--checker-b');
       ctx.fillStyle = a; ctx.fillRect(0, 0, ab.w, ab.h);

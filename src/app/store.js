@@ -80,6 +80,8 @@ export function createProject() {
     artboard: { w: 1920, h: 1080, bg: 'transparent', bgColor: '#20193a', checker: true, safe: false },
     fps: 30,
     duration: 4,
+    // Still titles are designed and exported as PNG; Animated titles add entrance, hold and exit animation
+    animated: storeGet('animatedDefault', true),
     layers: [],
     rev: 0,
   };
@@ -141,6 +143,8 @@ export function projectFromJSON(json) {
     anim: { ...JSON.parse(JSON.stringify(DEFAULT_ANIM)), ...l.anim, in: { ...DEFAULT_ANIM.in, ...l.anim?.in }, out: { ...DEFAULT_ANIM.out, ...l.anim?.out }, loop: { ...DEFAULT_ANIM.loop, ...l.anim?.loop } },
     rev: 0, layoutRev: 0,
   }));
+  // titles saved before the Still/Animated switch keep their animation
+  p.animated = json.animated ?? true;
   delete p.format; delete p.version;
   return p;
 }

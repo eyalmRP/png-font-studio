@@ -58,6 +58,13 @@ export function createInspector() {
   ];
   const tabBar = tabs({ class: 'icon-tabs', tabs: TABS, value: state.ui.rightTab, onChange: (id) => { state.ui.rightTab = id; storeSet('rightTab', id); build(); } });
   head.appendChild(tabBar);
+  // a still title has no animation settings
+  const syncTabs = () => {
+    const still = state.project.animated === false;
+    tabBar.children[TABS.findIndex((x) => x.id === 'animate')].hidden = still;
+    if (still && state.ui.rightTab === 'animate') { state.ui.rightTab = 'character'; tabBar.setValue('character'); build(); }
+  };
+  syncTabs();
   let refreshers = [];
   let builtFor = null;
   const reg = (fn) => { refreshers.push(fn); fn(); };
@@ -417,7 +424,7 @@ export function createInspector() {
   }
 
   const offs = [
-    on('selection', () => refresh()), on('project', () => refresh()), on('edit', () => refresh()), on('fonts', () => build()), on('font', () => refresh()),
+    on('selection', () => refresh()), on('project', (d) => { if (d && (d.what === 'mode' || d.what === 'layout')) syncTabs(); refresh(); }), on('edit', () => refresh()), on('fonts', () => build()), on('font', () => refresh()),
   ];
   build();
   return { el, destroy() { offs.forEach((f) => f()); }, build };

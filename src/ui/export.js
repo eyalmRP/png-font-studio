@@ -35,9 +35,13 @@ export async function openExport() {
   const bar = h('div.progress', h('div'));
   bar.hidden = true;
   let cancelled = false, busy = false;
+  // a still title exports images only
+  const still = state.project.animated === false;
+  const formats = still ? FORMATS.filter((f) => f.still) : FORMATS;
+  if (!formats.some((f) => f.id === opts.format)) opts.format = formats[0].id;
 
   const render = () => {
-    cards.replaceChildren(...FORMATS.map((f) => {
+    cards.replaceChildren(...formats.map((f) => {
       const disabled = f.standaloneOnly && !standalone;
       return h('button.export-card', {
         type: 'button', class: opts.format === f.id ? 'on' : '', disabled,
@@ -56,6 +60,7 @@ export async function openExport() {
       fmt.still ? null : h('p.hint', t('{n} frames, {s} s. The length comes from the animation presets and the hold time in the player.', { n: Math.max(1, Math.round(syncTiming() * state.project.fps)), s: +state.project.duration.toFixed(2) })),
       ['gif', 'apng', 'webp'].includes(opts.format) ? toggle({ label: t('Loop forever'), iconName: 'repeat', value: opts.loop, onChange: (v) => { opts.loop = v; } }) : null,
       opts.format === 'mp4' && ab.bg !== 'color' ? h('p.hint', t('MP4 cannot store transparency, so the artboard background colour is used.')) : null,
+      still ? h('p.hint', t('This title is Still. Switch to Animated in the top bar to export video, GIF or a PNG sequence.')) : null,
     ].filter(Boolean));
   };
   render();
@@ -97,7 +102,7 @@ function cropFor(opts, project, times) {
     let b;
     if (only) {
       if (!layerVisibleAt(only, tm)) continue;
-      const r = renderLayer(only, tm, 0.25);
+      const r = renderLayer(only, tm, 0.25, { noAnim: project.animated === false });
       if (!r) continue;
       const M = layerMatrix(only);
       const pts = [[r.rect.x, r.rect.y], [r.rect.x + r.rect.w, r.rect.y], [r.rect.x, r.rect.y + r.rect.h], [r.rect.x + r.rect.w, r.rect.y + r.rect.h]].map(([x, y]) => M.transformPoint(new DOMPoint(x, y)));

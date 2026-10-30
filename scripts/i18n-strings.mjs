@@ -25,6 +25,7 @@ for (const file of files) {
   for (const name of ['const LABELS = {', 'const ANIM_NAMES = {', 'export function blendName', 'const GROUP_LABEL = {']) for (const v of values(block(src, name))) add(v, rel + ' (table)');
   for (const m of src.matchAll(/\b(?:label|desc|name):\s*'((?:[^'\\]|\\.)*)'/g)) if (/charsets|export\.js|recolor|titles\.js/.test(rel)) add(unq(m[1]), rel + ' (table)');
   for (const m of src.matchAll(/\['\w+', '((?:[^'\\]|\\.)*)', '--[\w-]+'\]/g)) add(unq(m[1]), rel + ' (guides)');
+  for (const m of src.matchAll(/\['((?:[^'\\]|\\.)*)', '#[0-9a-fA-F]{6}'\]/g)) add(unq(m[1]), rel + ' (colours)');
   for (const m of src.matchAll(/\bt\(\{([^}]*)\}/g)) for (const v of values('{' + m[1] + '}')) add(v, rel + ' (table)');
   for (const m of src.matchAll(/const detected = \{([^}]*)\}/g)) { for (const v of values('{' + m[1] + '}')) add(v, rel); add('flat', rel); }
 }

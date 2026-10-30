@@ -89,7 +89,7 @@ export function createPlayer() {
   const offs = [
     on('project', (d) => { if (!d || d.what !== 'timing') refresh(); hold.setValue(state.project.hold ?? 1.5); }),
     on('anim', refresh),
-    on('key', (e) => { if (state.ui.mode === 'titles' && (e.key === 'k' || e.key === 'K') && !e.ctrlKey && !e.metaKey) toggle_(); }),
+    on('key', (e) => { if (state.ui.mode === 'titles' && state.project.animated !== false && (e.key === 'k' || e.key === 'K') && !e.ctrlKey && !e.metaKey) toggle_(); }),
     on('preview-layer', () => play(0)),
   ];
   refresh();

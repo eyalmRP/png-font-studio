@@ -85,6 +85,8 @@ export function renderLayer(layer, time, scale, opts = {}) {
 /** Draw all visible layers. base: DOMMatrix mapping artboard px → canvas px. */
 export function drawLayers(ctx, project, time, base, opts = {}) {
   const pxPerUnit = Math.hypot(base.a, base.b);
+  // a still title is drawn at rest, without its animation
+  if (project.animated === false && opts.noAnim === undefined) opts = { ...opts, noAnim: true };
   for (const layer of project.layers) {
     if (!layerVisibleAt(layer, time)) continue;
     if (opts.only && !opts.only.includes(layer.id)) continue;
@@ -119,7 +121,7 @@ export function contentBounds(project, time) {
   let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
   for (const layer of project.layers) {
     if (!layerVisibleAt(layer, time)) continue;
-    const r = renderLayer(layer, time, 1);
+    const r = renderLayer(layer, time, 1, { noAnim: project.animated === false });
     if (!r) continue;
     const M = layerMatrix(layer);
     for (const [px, py] of [[r.rect.x, r.rect.y], [r.rect.x + r.rect.w, r.rect.y], [r.rect.x, r.rect.y + r.rect.h], [r.rect.x + r.rect.w, r.rect.y + r.rect.h]]) {

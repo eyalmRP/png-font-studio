@@ -405,7 +405,7 @@ export function menu(anchor, items) {
   const el = h('div.menu', { role: 'menu' }, items.map((it) => it === '-' ? h('div.menu-sep') : h('button.menu-item', {
     type: 'button', role: 'menuitem', disabled: it.disabled, class: it.danger ? 'danger' : '',
     on: { click: () => { close(); it.onClick && it.onClick(); } },
-  }, it.icon ? icon(it.icon, 15) : h('span.menu-ic'), h('span', it.label), it.hint ? h('span.menu-hint', it.hint) : null)));
+  }, it.swatch ? h('span.menu-swatch', { style: { background: it.swatch } }) : it.icon ? icon(it.icon, 15) : h('span.menu-ic'), h('span', it.label), it.hint ? h('span.menu-hint', it.hint) : null)));
   document.body.appendChild(el);
   const r = anchor.getBoundingClientRect();
   const mw = el.offsetWidth, mh = el.offsetHeight;

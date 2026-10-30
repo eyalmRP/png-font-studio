@@ -233,6 +233,11 @@ button { cursor: pointer; }
 /* ---------- stage ---------- */
 .stage { position: relative; min-width: 0; min-height: 0; overflow: hidden; touch-action: none; }
 .stage canvas.view { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+/* preview background button shows the chosen colour as a dot */
+.stage-bar .icon-btn { position: relative; }
+.bg-swatch { position: absolute; inset-inline-end: 3px; bottom: 3px; width: 8px; height: 8px; border-radius: 50%; border: 1px solid var(--line-strong); background: transparent; }
+.bg-swatch:not([style*="background"]) { display: none; }
+.menu-swatch { width: 15px; height: 15px; border-radius: 4px; border: 1px solid var(--line-strong); flex: none; }
 .stage .ime { position: absolute; width: 2px; height: 20px; opacity: 0; border: 0; padding: 0; resize: none; overflow: hidden; pointer-events: none; font-size: 16px; }
 .stage-bar { position: absolute; inset-block-start: 10px; inset-inline-start: 10px; display: flex; gap: 2px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--r); padding: 3px; box-shadow: var(--shadow); align-items: center; }
 .stage-bar .zoom-label { min-width: 46px; text-align: center; font-variant-numeric: tabular-nums; color: var(--fg-2); font-size: 12px; }

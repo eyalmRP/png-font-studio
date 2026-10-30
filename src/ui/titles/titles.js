@@ -176,7 +176,7 @@ export function mountTitles({ left, right, center, exportSlot, sizes, applySizes
   });
   function applyMode() {
     const anim = state.project.animated !== false;
-    // the interface accent follows the mode: pink for video, blue for still images
+    // the interface accent follows the mode: blue for video, pink for still images
     document.documentElement.dataset.mode = anim ? 'animated' : 'still';
     modePills.setValue(anim ? 'anim' : 'still');
     if (!anim) player.stop();

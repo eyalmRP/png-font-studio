@@ -1,5 +1,5 @@
 // Build a font from prompt sheets the same way the importer does (reference-H scaling, even sizes, auto placement).
-// Usage: node scripts/font-from-sheets.mjs "<Font name>" <out.zip> <layout-id>=<sheet.png> ...
+// Usage: node scripts/font-from-sheets.mjs "<Font name>" <out.zip> <layout-id>=<sheet.png>[=<only these chars>] ...
 import fs from 'node:fs';
 import { readPNG, encodePNG } from './lib/png-node.mjs';
 import { detectGrid, extractGlyphs, detectBackground, removeBackgroundColor } from '../src/core/image.js';
@@ -8,7 +8,8 @@ import { createFont, setGlyph, autoMetrics, normalizeSizes, sheetGlyphs, fontToJ
 import { zipSync } from '../src/core/zip.js';
 
 export function buildFromSheets(name, specs) {
-  const sheets = specs.map(([id, file]) => {
+  // a spec may name only some of its characters ([id, file, 'l']): the rest of that sheet is left out
+  const sheets = specs.map(([id, file, only]) => {
     const layout = [...PROMPT_LAYOUTS, ...LAYOUTS].find((l) => l.id === id);
     if (!layout) throw new Error('unknown layout ' + id);
     let img = readPNG(file);
@@ -16,11 +17,12 @@ export function buildFromSheets(name, specs) {
     if (bg) img = removeBackgroundColor(img, bg);
     const grid = detectGrid(img, { rows: layout.rows, cols: layout.cols });
     const cells = extractGlyphs(img, grid);
-    const chars = layout.chars.map((ch, i) => (cells[i].empty ? null : ch));
+    const chars = layout.chars.map((ch, i) => (cells[i].empty || (only && !only.includes(ch) && i !== layout.ref) ? null : ch));
     return { chars, cells, ref: layout.ref !== undefined && chars[layout.ref] === 'H' ? layout.ref : -1 };
   });
   const font = createFont(name);
   font.family = name;
+  // later sheets win, so a fix-up sheet replaces glyphs from the main sheets
   for (const g of sheetGlyphs(sheets)) setGlyph(font, g.char, g.image, { scale: g.scale, baseScale: g.scale });
   normalizeSizes(font);
   autoMetrics(font);

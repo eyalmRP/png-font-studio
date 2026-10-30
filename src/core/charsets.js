@@ -34,6 +34,8 @@ export const PROMPT_LAYOUTS = [
   { id: 'prompt-4', name: 'Prompt sheet 4 · brackets & signs', rows: 4, cols: 7, ref: 27, chars: rowsOf('( ) [ ] { } /', '\\ | _ < > ~ ^', '& * # @ % ‰ §', '¶ † ‡ © ® ™ H') },
   { id: 'prompt-5', name: 'Prompt sheet 5 · currency & maths', rows: 4, cols: 7, ref: 27, chars: rowsOf('$ € £ ¥ ₪ ¢ ₹', '₽ ₩ ₿ ° + − ×', '÷ = ≠ ≈ ≤ ≥ ±', '∞ √ π Σ µ Ω H') },
   { id: 'prompt-6', name: 'Prompt sheet 6 · more maths', rows: 3, cols: 3, ref: 8, chars: rowsOf('∆ ∂ ∫', '∏ ∈ ∩', '∪ ¬ H') },
+  // redraws of glyphs that came out wrong or in a different weight; the H is only a size reference
+  { id: 'prompt-7', name: 'Prompt sheet 7 · fixes (maths symbols and l)', rows: 2, cols: 5, ref: 9, chars: rowsOf('∆ ∂ ∫ ∏ ∈', '∩ ∪ ¬ l H') },
 ];
 
 export const CHARSET_GROUPS = [

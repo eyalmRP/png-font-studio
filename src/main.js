@@ -1,7 +1,8 @@
 // Boot: load fonts (library or built-ins), restore or create the title, mount the app.
 import './ui/he.js';
 import { applyLang, t } from './ui/i18n.js';
-import { h } from './ui/dom.js';
+import { h, storeGet, storeSet } from './ui/dom.js';
+import { faceVariant } from './core/recolor.js';
 import { state, addFont, createProject, projectFromJSON, newTextLayer, newEffect, emit, markLayer } from './app/store.js';
 import { mountApp, render } from './ui/app.js';
 import { fontFromZipBytes } from './storage/files.js';
@@ -9,9 +10,13 @@ import { loadFontRecords, saveFontRecord, loadProjectRecord } from './storage/li
 import { startAutosave } from './ui/projectio.js';
 import { on } from './app/store.js';
 
+// Bump BUILTIN_VERSION when the built-in fonts change: a library from an older version gets them replaced.
+const BUILTIN_VERSION = 2;
 const BUILTIN = [
   { id: 'builtin-bubble-blue', file: 'fonts/bubble-blue.zip', key: 'bubble-blue', order: 0 },
-  { id: 'builtin-bubble-orange', file: 'fonts/bubble-orange.zip', key: 'bubble-orange', order: 1 },
+  // colour variants are made from Bubble Blue when the app loads (one font file to download)
+  { id: 'builtin-bubble-orange', from: 'builtin-bubble-blue', face: 'Orange', name: 'Bubble Orange', order: 1 },
+  { id: 'builtin-bubble-pearl', from: 'builtin-bubble-blue', face: 'Pearl', name: 'Bubble Pearl', order: 2 },
 ];
 
 async function builtinBytes(b) {
@@ -29,12 +34,20 @@ async function builtinBytes(b) {
 
 export async function loadBuiltins({ save = true } = {}) {
   const fonts = [];
+  const byId = new Map();
   for (const b of BUILTIN) {
     try {
-      const f = await fontFromZipBytes(await builtinBytes(b));
+      let f;
+      if (b.from) {
+        const src = byId.get(b.from);
+        if (!src) continue;
+        f = faceVariant(src, b.face, b.name);
+        f.family = src.family;
+      } else f = await fontFromZipBytes(await builtinBytes(b));
       f.id = b.id; f.builtin = true; f.order = b.order;
+      byId.set(f.id, f);
       fonts.push(f);
-      if (save) saveFontRecord(f);
+      if (save) await saveFontRecord(f);
     } catch (e) { console.warn(e); }
   }
   return fonts;
@@ -66,7 +79,14 @@ async function boot() {
   const root = document.getElementById('app');
   root.appendChild(h('div.empty', { style: { margin: 'auto' } }, t('Loading fonts…')));
   let fonts = await loadFontRecords();
-  if (!fonts.length) fonts = await loadBuiltins();
+  if (!fonts.length) { fonts = await loadBuiltins(); storeSet('builtinVersion', BUILTIN_VERSION); }
+  else if (storeGet('builtinVersion', 1) < BUILTIN_VERSION) {
+    // newer built-in fonts replace the stored ones; the user's own fonts stay
+    const fresh = await loadBuiltins();
+    const ids = new Set(fresh.map((f) => f.id));
+    fonts = [...fresh, ...fonts.filter((f) => !ids.has(f.id))];
+    storeSet('builtinVersion', BUILTIN_VERSION);
+  }
   for (const f of fonts) addFont(f, { select: false });
   state.currentFontId = state.fontOrder[0] || null;
   const rec = await loadProjectRecord();

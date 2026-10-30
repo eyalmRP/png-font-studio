@@ -24,10 +24,10 @@ async function build() {
 <style>${css}</style>`;
   const bodyStart = '<div id="app"></div>';
   fs.mkdirSync(path.join(dist, 'artifact/fonts'), { recursive: true });
-  for (const f of ['bubble-blue.zip', 'bubble-orange.zip']) fs.copyFileSync(path.join(root, 'assets/fonts', f), path.join(dist, 'artifact/fonts', f));
+  for (const f of ['bubble-blue.zip']) fs.copyFileSync(path.join(root, 'assets/fonts', f), path.join(dist, 'artifact/fonts', f));
   fs.writeFileSync(path.join(dist, 'artifact/index.html'), `${head}\n${bodyStart}\n<script>${js}</script>\n`);
   const embed = {};
-  for (const k of ['bubble-blue', 'bubble-orange']) embed[k] = fs.readFileSync(path.join(root, 'assets/fonts', k + '.zip')).toString('base64');
+  for (const k of ['bubble-blue']) embed[k] = fs.readFileSync(path.join(root, 'assets/fonts', k + '.zip')).toString('base64');
   const standalone = `<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 ${head}

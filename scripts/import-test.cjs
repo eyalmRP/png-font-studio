@@ -1,4 +1,4 @@
-// Headless importer test: import the orange sheets through the UI and screenshot each step.
+// Headless importer test: import two of the bubble sheets through the UI and screenshot each step.
 const { chromium } = require('playwright');
 (async () => {
   const out = process.argv[2] || 'debug';
@@ -12,7 +12,7 @@ const { chromium } = require('playwright');
   await page.waitForTimeout(800);
   await page.click('button:has-text("Import sheets")');
   const [chooser] = await Promise.all([page.waitForEvent('filechooser'), page.click('button:has-text("Choose files")')]);
-  await chooser.setFiles(['assets/sheets/orange-3.png', 'assets/sheets/orange-1.png']);
+  await chooser.setFiles(['assets/sheets/bubble-2-lowercase.png', 'assets/sheets/bubble-1-capitals.png']);
   await page.waitForTimeout(3500);
   await page.screenshot({ path: `${out}/i1-importer.png` });
   await page.click('.imp-file:nth-child(2)');

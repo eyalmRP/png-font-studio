@@ -386,7 +386,8 @@ export function selectionRects(layout, start, end) {
     const sel = ln.items.filter((it) => it.index + it.len > start && it.index < end).sort((a, b) => a.x - b.x);
     let cur = null;
     for (const it of sel) {
-      if (cur && Math.abs(cur.x + cur.w - it.x) < 1) cur.w = it.x + it.adv - cur.x;
+      // neighbours that touch or overlap (negative kerning) share one rectangle
+      if (cur && it.x <= cur.x + cur.w + 1) cur.w = Math.max(cur.w, it.x + it.adv - cur.x);
       else { cur = { x: it.x, y: ln.top, w: it.adv, h: ln.bottom - ln.top }; rects.push(cur); }
     }
     // selected paragraph break: show a small block at line end

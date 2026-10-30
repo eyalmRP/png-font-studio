@@ -1,4 +1,5 @@
-// Export dialog: still PNG, PNG sequence, WebM (alpha), MP4, GIF, APNG, animated WebP, MOV (standalone only).
+// Export dialog: still PNG, PNG sequence, WebM (alpha), MP4, GIF, APNG, animated WebP, MOV (standalone only),
+// and an After Effects composition (letter images plus a script that rebuilds the title).
 import { h, storeGet, storeSet } from './dom.js';
 import { t, ltr } from './i18n.js';
 import { modal, button, pills, toggle, toast, numberField } from './controls.js';
@@ -13,6 +14,7 @@ import { GIFEncoder, quantize, applyPalette } from 'gifenc';
 import { muxWebM, bleedColors, alphaI420 } from '../encoders/webm.js';
 import { Muxer as MP4Muxer, ArrayBufferTarget as MP4Target } from 'mp4-muxer';
 import { syncTiming } from './titles/player.js';
+import { exportAEComp } from './aecomp.js';
 
 const FORMATS = [
   { id: 'png', label: 'PNG image', desc: 'The current frame with transparency.', still: true },
@@ -23,6 +25,7 @@ const FORMATS = [
   { id: 'gif', label: 'GIF', desc: 'For chat stickers. Edges are hard (1-bit transparency).' },
   { id: 'apng', label: 'Animated PNG', desc: 'Soft transparency, plays in all browsers.' },
   { id: 'webp', label: 'Animated WebP', desc: 'Small files with soft transparency.' },
+  { id: 'aecomp', label: 'After Effects composition', desc: 'A ZIP with the letters used and a script that builds an editable comp: one layer per letter, with warp and effects on each title.', still: true },
 ];
 
 export async function openExport() {
@@ -52,16 +55,19 @@ export async function openExport() {
     }));
     const fmt = FORMATS.find((f) => f.id === opts.format);
     const ab = state.project.artboard;
+    const ae = opts.format === 'aecomp';
+    const timed = !still && (!fmt.still || ae);
     optsEl.replaceChildren(...[
       h('div.field', h('span', t('Size')), pills({ value: opts.scale, options: [0.25, 0.5, 1, 2, 4].map((s) => ({ value: s, label: ltr(`${s}× · ${Math.round(ab.w * s)}×${Math.round(ab.h * s)}`) })), onChange: (v) => { opts.scale = v; render(); } })),
-      toggle({ label: t('Trim to the title (crop away empty space)'), iconName: 'crop', value: opts.trim, onChange: (v) => { opts.trim = v; } }),
+      ae ? null : toggle({ label: t('Trim to the title (crop away empty space)'), iconName: 'crop', value: opts.trim, onChange: (v) => { opts.trim = v; } }),
       toggle({ label: t('Include background colour'), iconName: 'palette', value: opts.background || opts.format === 'mp4', onChange: (v) => { opts.background = v; } }),
       toggle({ label: t('Only the selected layer'), iconName: 'layers', value: opts.onlySelected, onChange: (v) => { opts.onlySelected = v; } }),
-      fmt.still ? null : h('div.field', h('span', t('Frame rate')), pills({ value: state.project.fps, options: [24, 25, 30, 50, 60].map((f) => ({ value: f, label: `${f} fps` })), onChange: (v) => { state.project.fps = v; syncTiming(); render(); } })),
-      fmt.still ? null : h('p.hint', t('{n} frames, {s} s. The length comes from the animation presets and the hold time in the player.', { n: Math.max(1, Math.round(syncTiming() * state.project.fps)), s: +state.project.duration.toFixed(2) })),
+      timed ? h('div.field', h('span', t('Frame rate')), pills({ value: state.project.fps, options: [24, 25, 30, 50, 60].map((f) => ({ value: f, label: `${f} fps` })), onChange: (v) => { state.project.fps = v; syncTiming(); render(); } })) : null,
+      timed ? h('p.hint', t('{n} frames, {s} s. The length comes from the animation presets and the hold time in the player.', { n: Math.max(1, Math.round(syncTiming() * state.project.fps)), s: +state.project.duration.toFixed(2) })) : null,
+      ae ? h('p.hint', t('Size sets the composition size. Unzip, then in After Effects choose File > Scripts > Run Script File and pick the .jsx inside. Animation becomes keyframes on each letter; effects without an After Effects match are listed in the README.')) : null,
       ['gif', 'apng', 'webp'].includes(opts.format) ? toggle({ label: t('Loop forever'), iconName: 'repeat', value: opts.loop, onChange: (v) => { opts.loop = v; } }) : null,
       opts.format === 'mp4' && ab.bg !== 'color' ? h('p.hint', t('MP4 cannot store transparency, so the artboard background colour is used.')) : null,
-      still ? h('p.hint', t('This title is Still. Switch to Animated in the top bar to export video, GIF or a PNG sequence.')) : null,
+      still && !ae ? h('p.hint', t('This title is Still. Switch to Animated in the top bar to export video, GIF or a PNG sequence.')) : null,
     ].filter(Boolean));
   };
   render();
@@ -129,6 +135,7 @@ export async function exportAs(opts, progress = () => {}, isCancelled = () => fa
   const view = opts.onlySelected && selectedLayer() ? { ...project, layers: [selectedLayer()] } : project;
   const bg = opts.background || opts.format === 'mp4';
   const yieldUI = () => new Promise((r) => setTimeout(r, 0));
+  if (opts.format === 'aecomp') return exportAEComp(project, opts, view.layers.filter((l) => l.visible), progress, isCancelled);
   if (opts.format === 'png') {
     const crop = cropFor(opts, view, [state.time]);
     const c = renderFrame(view, state.time, opts.scale, { background: bg, crop });

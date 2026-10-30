@@ -323,11 +323,8 @@ export function createInspector() {
       return wrap;
     };
     const playBtn = button({ label: t('Preview'), icon: 'play', kind: 'primary', onClick: () => emit('preview-layer', layer) });
-    const timing = h('div.grid2',
-      timeField(t('Starts'), () => layer.anim.start, (v) => setA((x) => { x.start = Math.max(0, Math.min(v, x.end - 0.1)); }, 'anim:start')),
-      timeField(t('Ends'), () => layer.anim.end, (v) => setA((x) => { x.end = Math.max(x.start + 0.1, v); if (v > state.project.duration) state.project.duration = Math.ceil(v * 10) / 10; }, 'anim:end')));
-    body.appendChild(section({ id: 'an-timing', title: t('Timing'), iconName: 'timer' }, timing, playBtn,
-      h('p.hint', t('The layer is visible between Starts and Ends. Its entrance plays from Starts, its exit finishes at Ends.'))));
+    body.appendChild(section({ id: 'an-timing', title: t('How it plays'), iconName: 'timer' }, playBtn,
+      h('p.hint', t('The title animates in, holds, then animates out. Set the hold time in the player under the stage.'))));
 
     const phaseSection = (kind, title, iconName, src) => {
       const cfg = a[kind];
@@ -355,12 +352,6 @@ export function createInspector() {
     }
     body.appendChild(section({ id: 'an-loop', title: t('While on screen (loop)'), iconName: 'repeat', badge: a.loop.preset !== 'none' ? t(ANIM_NAMES[a.loop.preset]) : null }, ...loopKids));
     phaseSection('out', t('Transition out'), 'skipBack', OUT_PRESETS);
-  }
-
-  function timeField(label, get, setv) {
-    const f = numberField({ label, iconName: 'timer', min: 0, max: 600, step: 0.05, unit: 's', value: get(), onInput: setv, onChange: setv });
-    reg(() => f.setValue(get()));
-    return f;
   }
 
   // ---------- layer ----------

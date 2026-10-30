@@ -12,6 +12,7 @@ import { encodeMOV } from '../encoders/mov.js';
 import { GIFEncoder, quantize, applyPalette } from 'gifenc';
 import { muxWebM, bleedColors, alphaI420 } from '../encoders/webm.js';
 import { Muxer as MP4Muxer, ArrayBufferTarget as MP4Target } from 'mp4-muxer';
+import { syncTiming } from './titles/player.js';
 
 const FORMATS = [
   { id: 'png', label: 'PNG image', desc: 'The current frame with transparency.', still: true },
@@ -46,15 +47,16 @@ export async function openExport() {
     }));
     const fmt = FORMATS.find((f) => f.id === opts.format);
     const ab = state.project.artboard;
-    optsEl.replaceChildren(
+    optsEl.replaceChildren(...[
       h('div.field', h('span', t('Size')), pills({ value: opts.scale, options: [0.25, 0.5, 1, 2, 4].map((s) => ({ value: s, label: `${s}× · ${Math.round(ab.w * s)}×${Math.round(ab.h * s)}` })), onChange: (v) => { opts.scale = v; render(); } })),
       toggle({ label: t('Trim to the title (crop away empty space)'), iconName: 'crop', value: opts.trim, onChange: (v) => { opts.trim = v; } }),
       toggle({ label: t('Include background colour'), iconName: 'palette', value: opts.background || opts.format === 'mp4', onChange: (v) => { opts.background = v; } }),
       toggle({ label: t('Only the selected layer'), iconName: 'layers', value: opts.onlySelected, onChange: (v) => { opts.onlySelected = v; } }),
-      fmt.still ? null : h('p.hint', t('{n} frames at {fps} fps ({s} s). Change the length and frame rate in the timeline.', { n: Math.max(1, Math.round(state.project.duration * state.project.fps)), fps: state.project.fps, s: state.project.duration })),
+      fmt.still ? null : h('div.field', h('span', t('Frame rate')), pills({ value: state.project.fps, options: [24, 25, 30, 50, 60].map((f) => ({ value: f, label: `${f} fps` })), onChange: (v) => { state.project.fps = v; syncTiming(); render(); } })),
+      fmt.still ? null : h('p.hint', t('{n} frames, {s} s. The length comes from the animation presets and the hold time in the player.', { n: Math.max(1, Math.round(syncTiming() * state.project.fps)), s: +state.project.duration.toFixed(2) })),
       ['gif', 'apng', 'webp'].includes(opts.format) ? toggle({ label: t('Loop forever'), iconName: 'repeat', value: opts.loop, onChange: (v) => { opts.loop = v; } }) : null,
       opts.format === 'mp4' && ab.bg !== 'color' ? h('p.hint', t('MP4 cannot store transparency, so the artboard background colour is used.')) : null,
-    );
+    ].filter(Boolean));
   };
   render();
   const go = button({ label: t('Export'), icon: 'download', kind: 'primary', onClick: () => run() });
@@ -114,6 +116,7 @@ function cropFor(opts, project, times) {
 /** Render frames and encode. Returns { name, blob } or null if cancelled. */
 export async function exportAs(opts, progress = () => {}, isCancelled = () => false) {
   const project = state.project;
+  syncTiming(project);
   const base = safeName(project.name === 'Untitled title' && project.layers[0] ? project.layers[0].name : project.name, 'title');
   const view = opts.onlySelected && selectedLayer() ? { ...project, layers: [selectedLayer()] } : project;
   const bg = opts.background || opts.format === 'mp4';

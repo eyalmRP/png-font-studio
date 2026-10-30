@@ -53,7 +53,8 @@ function demoProject() {
   a.anim.out.preset = 'popOut';
   const b = newTextLayer('PNG Font Studio', orange, 960, 690, { size: 170, effects: [newEffect('stroke', { size: 10, color: '#ffffff' }), newEffect('dropShadow', { distance: 12, size: 10, opacity: 40, color: '#2a0b4a' })] });
   b.warp = { ...b.warp, style: 'arc', bend: 0.18 };
-  b.anim.start = 0.5;
+  b.anim.in.delay = 0.4;
+  p.hold = 1.4;
   b.anim.in.preset = 'popBounce';
   b.anim.out.preset = 'fallDown';
   p.layers.push(a, b);

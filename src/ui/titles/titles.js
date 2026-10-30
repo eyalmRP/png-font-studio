@@ -1,11 +1,11 @@
-// Titles mode: layers + artboard (left), stage + timeline (centre), inspector (right).
+// Titles mode: layers + artboard (left), stage + animation player (centre), inspector (right).
 import { h, clear, icon } from '../dom.js';
 import { t } from '../i18n.js';
-import { section, iconButton, button, numberField, pills, colorField, select, splitter, menu } from '../controls.js';
+import { section, iconButton, button, numberField, pills, colorField, select, menu } from '../controls.js';
 import { state, on, emit, selectLayer, checkpoint, projectChanged, newTextLayer, selectedLayer } from '../../app/store.js';
 import { createStage } from './stage.js';
 import { createInspector } from './inspector.js';
-import { createTimeline } from './timeline.js';
+import { createPlayer } from './player.js';
 import { renderLayer } from '../../render/layer.js';
 import { openExport } from '../export.js';
 import { openProject, saveProject } from '../projectio.js';
@@ -22,10 +22,10 @@ const SIZES = [
 
 export function mountTitles({ left, right, center, exportSlot, sizes, applySizes, saveSizes }) {
   const stage = createStage();
-  const timeline = createTimeline();
+  const player = createPlayer();
   const inspector = createInspector();
-  const hs = splitter({ orient: 'h', invert: true, get: () => sizes.bottom, set: (v) => { sizes.bottom = v; applySizes(); emit('resize'); }, min: 90, max: 520, done: saveSizes });
-  center.append(stage.el, hs, timeline.el);
+  center.classList.add('with-player');
+  center.append(stage.el, player.el);
   right.appendChild(inspector.el);
 
   // ---------- left: layers + artboard ----------
@@ -166,6 +166,6 @@ export function mountTitles({ left, right, center, exportSlot, sizes, applySizes
   renderLayers();
   void menu;
   return {
-    destroy() { stage.destroy(); timeline.destroy(); inspector.destroy(); offs.forEach((f) => f()); exportSlot.replaceChildren(); },
+    destroy() { stage.destroy(); player.destroy(); inspector.destroy(); offs.forEach((f) => f()); exportSlot.replaceChildren(); center.classList.remove('with-player'); },
   };
 }

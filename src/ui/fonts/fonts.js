@@ -9,7 +9,7 @@ import {
   createFont, setGlyph, remapGlyph, duplicateGlyph, autoMetrics, normalizeSizes, sortedChars, cloneFont, glyphAdvance, opticalKern, touch,
 } from '../../core/font.js';
 import { charLabel, CHARSET_GROUPS } from '../../core/charsets.js';
-import { flipImage, rotate90, trimImage, cleanupAlpha, adjustHsl, gradientMap, cloneImage } from '../../core/image.js';
+import { flipImage, rotate90, trimImage, cleanupAlpha, adjustHsl, gradientMap, cloneImage, recolorRange, rgbToHsl } from '../../core/image.js';
 import { createDoc } from '../../core/textdoc.js';
 import { layoutDoc, inkBounds } from '../../core/layout.js';
 import { prepareText, drawPrepared } from '../../render/text.js';
@@ -22,6 +22,38 @@ import { drawSample } from '../sample.js';
 
 const GROUP_FILTERS = ['all', 'upper', 'lower', 'digits', 'punct', 'symbols', 'hebrew', 'other', 'missing'];
 const GROUP_LABEL = { all: 'All', upper: 'Uppercase', lower: 'Lowercase', digits: 'Digits', punct: 'Punctuation', symbols: 'Symbols', hebrew: 'Hebrew', other: 'Other', missing: 'Missing' };
+
+const stops = (...pairs) => pairs.map(([pos, color]) => ({ pos, color }));
+/** Face colour presets: colours by brightness (dark → light) so the face keeps its shading. */
+const FACE_PRESETS = [
+  { name: 'Orange', stops: stops([0.2, '#f2440f'], [0.35, '#ff6a12'], [0.5, '#ff9a1a'], [0.65, '#ffc21f'], [0.8, '#ffe437'], [0.95, '#fff6b8']) },
+  { name: 'Pearl', stops: stops([0.2, '#7a6fe0'], [0.35, '#aaa3ef'], [0.5, '#d6d3f8'], [0.65, '#eeedfc'], [0.8, '#fbfbff'], [1, '#ffffff']) },
+  { name: 'Gold', stops: stops([0.2, '#8a5300'], [0.4, '#c98a10'], [0.6, '#f0c040'], [0.8, '#fff0a0'], [0.95, '#fffbe6']) },
+  { name: 'Red', stops: stops([0.15, '#8f0016'], [0.3, '#d1142b'], [0.5, '#ff4b4b'], [0.7, '#ff8f80'], [0.9, '#ffe0d8']) },
+  { name: 'Green', stops: stops([0.2, '#0b6b2c'], [0.4, '#1fae4b'], [0.6, '#6fe36a'], [0.8, '#c9ff9e'], [0.95, '#f4ffe6']) },
+  { name: 'Purple', stops: stops([0.15, '#3d1287'], [0.35, '#6a2fd8'], [0.55, '#9d6bff'], [0.75, '#cdb3ff'], [0.95, '#f3edff']) },
+];
+
+/** The font's main face colour: the hue with the most strongly coloured pixels. */
+function dominantHue(font) {
+  const bins = new Float64Array(36);
+  for (const g of font.glyphs.values()) {
+    if (!g.image) continue;
+    const d = g.image.data;
+    for (let i = 0; i < d.length; i += 16) {
+      if (d[i + 3] < 200) continue;
+      const chroma = (Math.max(d[i], d[i + 1], d[i + 2]) - Math.min(d[i], d[i + 1], d[i + 2])) / 255;
+      if (chroma < 0.35) continue;
+      bins[Math.floor(rgbToHsl(d[i], d[i + 1], d[i + 2])[0] * 36) % 36] += chroma;
+    }
+  }
+  let best = 0;
+  for (let k = 1; k < 36; k++) if (bins[k] > bins[best]) best = k;
+  // refine with the neighbouring bins
+  const a = bins[(best + 35) % 36], b = bins[best], c = bins[(best + 1) % 36];
+  const off = (c - a) / (2 * (a + b + c) || 1);
+  return Math.round(((best + 0.5 + off) * 10 + 360) % 360);
+}
 
 export function mountFonts({ left, right, center, exportSlot }) {
   const offs = [];
@@ -100,19 +132,43 @@ export function mountFonts({ left, right, center, exportSlot }) {
 
   // ---------- recolour ----------
   function buildRecolor() {
-    let mode = 'hsl', hue = 160, sat = 0, light = 0;
+    // face mode recolours only the letter face (one colour range) and keeps a 3D base, outline and highlights
+    let mode = 'face', hue = 160, sat = 0, light = 0;
     let stops = [{ pos: 0, color: '#3a0a5c' }, { pos: 0.55, color: '#ff4fa3' }, { pos: 1, color: '#fff3b0' }];
+    let face = { hue: 205, width: 38, soft: 30 };
+    let faceStops = FACE_PRESETS[0].stops.map((x) => ({ ...x }));
+    let presetName = FACE_PRESETS[0].name;
     const preview = h('canvas');
     const hueF = numberField({ label: t('Hue'), min: -180, max: 180, unit: '°', slider: true, value: hue, onInput: (v) => { hue = v; drawPrev(); }, onChange: () => {} });
     const satF = numberField({ label: t('Saturation'), min: -100, max: 100, unit: '%', slider: true, value: sat, onInput: (v) => { sat = v; drawPrev(); }, onChange: () => {} });
     const lightF = numberField({ label: t('Lightness'), min: -100, max: 100, unit: '%', slider: true, value: light, onInput: (v) => { light = v; drawPrev(); }, onChange: () => {} });
     const grad = gradientField({ stops, onInput: (v) => { stops = v; drawPrev(); }, onChange: (v) => { stops = v; drawPrev(); } });
-    const modeP = pills({ class: 'stretch', value: mode, options: [{ value: 'hsl', label: t('Shift hue') }, { value: 'map', label: t('Gradient map') }], onChange: (v) => { mode = v; sync(); drawPrev(); } });
-    const sync = () => { for (const x of [hueF, satF, lightF]) x.style.display = mode === 'hsl' ? '' : 'none'; grad.style.display = mode === 'map' ? '' : 'none'; };
+    // face mode controls
+    const faceGrad = gradientField({ stops: faceStops, onInput: (v) => { faceStops = v; presetName = t('Custom'); drawPrev(); }, onChange: (v) => { faceStops = v; drawPrev(); } });
+    const presetGrid = h('div.preset-grid', FACE_PRESETS.map((pr) => h('button.preset', {
+      type: 'button', title: t(pr.name),
+      on: { click: (e) => { faceStops = pr.stops.map((x) => ({ ...x })); presetName = t(pr.name); faceGrad.setValue(faceStops); for (const b of presetGrid.children) b.classList.toggle('on', b === e.currentTarget); drawPrev(); } },
+    }, h('span', { style: { display: 'block', height: '14px', borderRadius: '4px', background: `linear-gradient(90deg, ${pr.stops.map((x) => x.color).join(', ')})` } }), t(pr.name))));
+    presetGrid.firstChild.classList.add('on');
+    const faceHue = numberField({ label: t('Face colour'), iconName: 'pipette', min: 0, max: 360, unit: '°', slider: true, value: face.hue, title: t('The colour of the letter face to replace'), onInput: (v) => { face.hue = v; swatch(); drawPrev(); }, onChange: () => {} });
+    const faceWidth = numberField({ label: t('Range'), min: 5, max: 90, unit: '°', slider: true, value: face.width, title: t('How far from that colour still counts as the face'), onInput: (v) => { face.width = v; drawPrev(); }, onChange: () => {} });
+    const faceSoft = numberField({ label: t('Softness'), min: 0, max: 90, unit: '°', slider: true, value: face.soft, onInput: (v) => { face.soft = v; drawPrev(); }, onChange: () => {} });
+    const hueSw = h('span', { style: { width: '22px', height: '22px', borderRadius: '50%', border: '1px solid var(--line-strong)', flex: 'none' } });
+    const swatch = () => { hueSw.style.background = `hsl(${face.hue}, 90%, 50%)`; };
+    const detectBtn = button({ label: t('Find face colour'), icon: 'wand', onClick: () => { const f = currentFont(); if (f) { face.hue = dominantHue(f); faceHue.setValue(face.hue); swatch(); drawPrev(); } } });
+    const faceBox = h('div', { style: { display: 'flex', flexDirection: 'column', gap: '10px' } },
+      presetGrid, faceGrad, h('div.row', hueSw, h('div', { style: { flex: 1 } }, faceHue)), faceWidth, faceSoft, detectBtn);
+    const modeP = pills({ class: 'stretch', value: mode, options: [{ value: 'face', label: t('Face colour') }, { value: 'hsl', label: t('Shift hue') }, { value: 'map', label: t('Gradient map') }], onChange: (v) => { mode = v; sync(); drawPrev(); } });
+    const sync = () => {
+      for (const x of [hueF, satF, lightF]) x.style.display = mode === 'hsl' ? '' : 'none';
+      grad.style.display = mode === 'map' ? '' : 'none';
+      faceBox.style.display = mode === 'face' ? '' : 'none';
+    };
     const recolor = (img) => {
       const out = cloneImage(img);
-      if (mode === 'hsl') adjustHsl(out.data, hue, sat / 100, light / 100);
-      else gradientMap(out.data, stops.map((s) => ({ pos: s.pos, color: hexToRgb(s.color) })), 1);
+      if (mode === 'face') recolorRange(out.data, face, faceStops.map((x) => ({ pos: x.pos, color: hexToRgb(x.color) })));
+      else if (mode === 'hsl') adjustHsl(out.data, hue, sat / 100, light / 100);
+      else gradientMap(out.data, stops.map((x) => ({ pos: x.pos, color: hexToRgb(x.color) })), 1);
       return out;
     };
     const drawPrev = rafThrottle(() => {
@@ -130,21 +186,24 @@ export function mountFonts({ left, right, center, exportSlot }) {
       if (!f) return;
       let target = f;
       if (asNew) {
-        const name = await promptDialog(t('New colour variant'), t('Font name'), `${f.family || f.name} ${mode === 'hsl' ? t('Hue') + ' ' + hue : t('Gradient')}`);
+        const suffix = mode === 'face' ? presetName : mode === 'hsl' ? t('Hue') + ' ' + hue : t('Gradient');
+        const name = await promptDialog(t('New colour variant'), t('Font name'), `${f.family || f.name} ${suffix}`);
         if (!name) return;
         target = cloneFont(f, name);
+        target.family = f.family || f.name;
       } else checkpoint('font:' + f.id, 'Recolour font');
       for (const g of target.glyphs.values()) if (g.image) { g.image = recolor(g.image); g.rev++; }
       touch(target);
       if (asNew) { addFont(target); saveFontRecord(target); toast(t('Created {name}', { name: target.name }), 'ok'); }
       else { fontChanged(target); emit('fonts'); }
     };
-    sync();
-    offs.push(on('fonts', () => drawPrev()));
-    setTimeout(drawPrev, 50);
+    sync(); swatch();
+    offs.push(on('fonts', () => { const f = currentFont(); if (f && f.id !== lastFontId) { lastFontId = f.id; face.hue = dominantHue(f); faceHue.setValue(face.hue); swatch(); } drawPrev(); }));
+    let lastFontId = null;
+    setTimeout(() => { const f = currentFont(); if (f) { lastFontId = f.id; face.hue = dominantHue(f); faceHue.setValue(face.hue); swatch(); } drawPrev(); }, 50);
     return section({ id: 'fonts-recolor', title: t('Colour variants'), iconName: 'palette', open: false },
-      h('p.hint', t('Make a new colour version of the whole font from its artwork, no new sheets needed.')),
-      modeP, hueF, satF, lightF, grad, preview,
+      h('p.hint', t('Make a new colour version of the whole font from its artwork, no new sheets needed. Face colour changes only the letter face and keeps the 3D base, outline and shine.')),
+      modeP, faceBox, hueF, satF, lightF, grad, preview,
       h('div.row-ctl', button({ label: t('Create variant'), icon: 'plus', kind: 'primary', onClick: () => make(true) }), button({ label: t('Apply to this font'), icon: 'brush', onClick: () => make(false) })));
   }
 

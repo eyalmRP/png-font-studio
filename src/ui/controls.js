@@ -335,7 +335,7 @@ export function gradientField(o) {
     }
     stops.push({ pos, color: c }); sel = stops.length - 1; color.setValue(c); posF.setValue(Math.round(pos * 100)); render(); emit(true);
   });
-  el.setValue = (v) => { stops = (v || []).map((s) => ({ ...s })); sel = Math.min(sel, stops.length - 1); render(); };
+  el.setValue = (v) => { stops = (v || []).map((s) => ({ ...s })); sel = Math.max(0, Math.min(sel, stops.length - 1)); if (stops[sel]) { color.setValue(stops[sel].color); posF.setValue(Math.round(stops[sel].pos * 100)); } render(); };
   posF.setValue(Math.round((stops[0]?.pos || 0) * 100));
   render();
   return el;

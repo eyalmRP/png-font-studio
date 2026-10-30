@@ -41,7 +41,15 @@ const SIMPLE_SETS = [
 export async function openImporter(initialFiles) {
   const items = []; // { file, img, kind, grid, cells, chars, single:{image,char}, recog }
   let active = 0;
-  const opts = storeGet('importOpts', { inset: 3, low: 24, high: 160, minArea: 24, clearLines: true, baselineMode: 'auto', baselinePos: 0.82, evenSizes: true, replace: true });
+  const IMPORT_DEFAULTS = { inset: 3, low: 24, high: 160, minArea: 24, clearLines: true, streaks: true, keyBackground: true, baselineMode: 'auto', baselinePos: 0.82, evenSizes: true, replace: true };
+  const opts = storeGet('importOpts', { ...IMPORT_DEFAULTS });
+  // a section reset puts its options back and processes the sheets again
+  const resetOpts = (keys) => async () => {
+    for (const k of keys) opts[k] = IMPORT_DEFAULTS[k];
+    storeSet('importOpts', opts);
+    for (const x of items) { if (x.bg) x.img = opts.keyBackground ? removeBackgroundColor(x.orig, x.bg) : x.orig; if (x.kind === 'sheet') await processSheet(x, false); }
+    renderAll();
+  };
   let target = 'new';
   let targetFontId = state.currentFontId;
   let newName = t('My font');
@@ -344,14 +352,14 @@ export async function openImporter(initialFiles) {
         preset, recogBtn,
         h('label.field', h('span', t('Characters in reading order (\\s skips a cell)')), mappingInput)));
     }
-    const nf = (key, label, o) => numberField({ label, value: opts[key], ...o, onChange: async (v) => { opts[key] = v; storeSet('importOpts', opts); for (const x of items) if (x.kind === 'sheet') await processSheet(x, false); renderAll(); }, onInput: () => {} });
+    const nf = (key, label, o) => numberField({ label, value: opts[key], def: IMPORT_DEFAULTS[key], ...o, onChange: async (v) => { opts[key] = v; storeSet('importOpts', opts); for (const x of items) if (x.kind === 'sheet') await processSheet(x, false); renderAll(); }, onInput: () => {} });
     const anyBg = items.some((x) => x.bg);
     const bgToggle = anyBg ? toggle({ label: t('Remove the flat background colour'), value: opts.keyBackground !== false, onChange: async (v) => {
       opts.keyBackground = v; storeSet('importOpts', opts);
       for (const x of items) if (x.bg) { x.img = v ? removeBackgroundColor(x.orig, x.bg) : x.orig; if (x.kind === 'sheet') await processSheet(x, false); }
       renderAll();
     } }) : null;
-    side.appendChild(section({ id: 'imp-clean', title: t('Clean-up'), iconName: 'eraser', open: anyBg },
+    side.appendChild(section({ id: 'imp-clean', title: t('Clean-up'), iconName: 'eraser', open: anyBg, onReset: resetOpts(['keyBackground', 'clearLines', 'streaks', 'low', 'high', 'minArea']) },
       bgToggle,
       toggle({ label: t('Remove grid lines'), value: opts.clearLines, onChange: async (v) => { opts.clearLines = v; storeSet('importOpts', opts); for (const x of items) if (x.kind === 'sheet') await processSheet(x, false); renderAll(); } }),
       toggle({ label: t('Remove thin streaks'), value: opts.streaks !== false, onChange: async (v) => { opts.streaks = v; storeSet('importOpts', opts); for (const x of items) if (x.kind === 'sheet') await processSheet(x, false); renderAll(); } }),
@@ -360,7 +368,7 @@ export async function openImporter(initialFiles) {
       nf('minArea', t('Smallest speck kept'), { min: 0, max: 2000, unit: 'px' })));
     const bl = pills({ class: 'stretch', value: opts.baselineMode, options: [{ value: 'auto', label: t('By character') }, { value: 'cell', label: t('From the sheet') }], onChange: (v) => { opts.baselineMode = v; storeSet('importOpts', opts); renderSide(); renderStage(); } });
     const blPos = opts.baselineMode === 'cell' ? numberField({ label: t('Baseline in cell'), min: 0, max: 100, unit: '%', slider: true, value: Math.round(opts.baselinePos * 100), onInput: (v) => { opts.baselinePos = v / 100; renderStage(); }, onChange: () => storeSet('importOpts', opts) }) : null;
-    side.appendChild(section({ id: 'imp-base', title: t('Placement'), iconName: 'baseline' }, bl, blPos,
+    side.appendChild(section({ id: 'imp-base', title: t('Placement'), iconName: 'baseline', onReset: resetOpts(['baselineMode', 'baselinePos', 'evenSizes']) }, bl, blPos,
       toggle({ label: t('Even out sizes'), value: opts.evenSizes, onChange: (v) => { opts.evenSizes = v; storeSet('importOpts', opts); } }),
       h('p.hint', opts.baselineMode === 'auto' ? t('Each glyph is placed by what it is: letters on the baseline, descenders below it, quotes at the top, maths centred, with overshoot for round shapes.') : t('Use this when the sheet was drawn on a shared baseline. Drag the slider to the baseline.'))));
     // target

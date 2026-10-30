@@ -608,4 +608,13 @@ export const HE = {
   'White': 'לבן',
   'Custom colour…': 'צבע מותאם…',
   'This title is Still. Switch to Animated in the top bar to export video, GIF or a PNG sequence.': 'הכותרת הזו במצב סטילס. עברו למצב מונפש בסרגל העליון כדי לייצא וידאו, GIF או רצף PNG.',
+  'Reset to default': 'איפוס לברירת המחדל',
+  'Double-click to reset': 'לחיצה כפולה לאיפוס',
+  'Reset to the measured values': 'איפוס לערכים שנמדדו',
+  'Reset placement, spacing and size': 'איפוס מיקום, ריווח וגודל',
+  'Reset effect': 'איפוס אפקט',
+  'Reset glyph': 'איפוס גליף',
+  'Auto metrics': 'מדידה אוטומטית',
+  'Auto place': 'מיקום אוטומטי',
+  'Space': 'רווח',
 };

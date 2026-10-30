@@ -6,7 +6,8 @@ import { state, on, emit, selectedLayer, checkpoint, projectChanged, newEffect, 
 import { currentCharStyle, currentParaStyle, setChar, setPara, isCollapsedEdit, setLayerText, enterEdit } from '../../app/textedit.js';
 import { EFFECTS, EFFECT_ORDER, BLEND_MODES, STYLE_PRESETS } from '../../core/effects-def.js';
 import { WARP_STYLES, warpPoint, DEFAULT_WARP } from '../../core/warp.js';
-import { IN_PRESETS, OUT_PRESETS, LOOP_PRESETS, ORDERS } from '../../core/anim.js';
+import { IN_PRESETS, OUT_PRESETS, LOOP_PRESETS, ORDERS, DEFAULT_ANIM } from '../../core/anim.js';
+import { DEFAULT_CHAR, DEFAULT_PARA } from '../../core/textdoc.js';
 import { drawSample } from '../sample.js';
 
 export const LABELS = {
@@ -126,10 +127,12 @@ export function createInspector() {
     body.appendChild(section({ id: 'ch-font', title: t('Font'), iconName: 'type' }, fontSel, prev));
 
     const nf = (key, o) => {
-      const f = numberField({ ...o, onInput: (v) => setChar({ [key]: v }, 'char:' + key), onChange: (v) => setChar({ [key]: v }, 'char:' + key) });
+      const f = numberField({ def: key === 'size' ? undefined : DEFAULT_CHAR[key], ...o, onInput: (v) => setChar({ [key]: v }, 'char:' + key), onChange: (v) => setChar({ [key]: v }, 'char:' + key) });
       reg(() => f.setValue(cs()[key]));
       return f;
     };
+    // a section reset puts its settings back to the defaults, for the selected letters or the whole title
+    const resetChar = (keys) => () => { setChar(Object.fromEntries(keys.map((k) => [k, DEFAULT_CHAR[k]]))); refresh(); };
     const kernPills = pills({
       class: 'stretch', value: cs().kerning,
       options: [{ value: 'optical', label: t('Optical') }, { value: 'metrics', label: t('Metrics') }, { value: 'none', label: '0' }],
@@ -138,17 +141,17 @@ export function createInspector() {
     reg(() => kernPills.setValue(cs().kerning));
     const kernField = nf('kern', { label: t('Pair kern'), iconName: 'arrowsH', min: -1000, max: 1000, step: 5, unit: '‰', title: t('Kerning before the character after the caret (1/1000 em)') });
     reg(() => { kernField.style.display = isCollapsedEdit(layer) ? '' : 'none'; });
-    body.appendChild(section({ id: 'ch-size', title: t('Size & spacing'), iconName: 'caseSensitive' },
+    body.appendChild(section({ id: 'ch-size', title: t('Size & spacing'), iconName: 'caseSensitive', onReset: resetChar(['tracking', 'kerning', 'kern', 'baselineShift']) },
       nf('size', { label: t('Size'), iconName: 'caseSensitive', min: 2, max: 3000, step: 1, unit: 'px', slider: true, sliderMin: 8, sliderMax: 600 }),
       nf('tracking', { label: t('Tracking'), iconName: 'moveH', min: -500, max: 2000, step: 5, unit: '‰', slider: true, sliderMin: -200, sliderMax: 600 }),
       h('div.field', h('span', t('Kerning')), kernPills), kernField,
       nf('baselineShift', { label: t('Baseline shift'), iconName: 'baseline', min: -2000, max: 2000, step: 1, unit: 'px', slider: true, sliderMin: -100, sliderMax: 100 }),
     ));
-    body.appendChild(section({ id: 'ch-scale', title: t('Scale, rotate & slant'), iconName: 'arrowsV' },
+    body.appendChild(section({ id: 'ch-scale', title: t('Scale, rotate & slant'), iconName: 'arrowsV', onReset: resetChar(['scaleX', 'scaleY', 'rotate', 'skew']) },
       h('div.grid2',
         nf('scaleX', { label: 'H', iconName: 'arrowsH', min: 1, max: 1000, step: 1, unit: '%', title: t('Horizontal scale') }),
         nf('scaleY', { label: 'V', iconName: 'arrowsV', min: 1, max: 1000, step: 1, unit: '%', title: t('Vertical scale') })),
-      (() => { const a = angleField({ label: t('Rotate characters'), value: cs().rotate, onInput: (v) => setChar({ rotate: v }, 'char:rot'), onChange: (v) => setChar({ rotate: v }, 'char:rot') }); reg(() => a.setValue(cs().rotate)); return a; })(),
+      (() => { const a = angleField({ label: t('Rotate characters'), value: cs().rotate, def: 0, onInput: (v) => setChar({ rotate: v }, 'char:rot'), onChange: (v) => setChar({ rotate: v }, 'char:rot') }); reg(() => a.setValue(cs().rotate)); return a; })(),
       nf('skew', { label: t('Slant'), iconName: 'italic', min: -60, max: 60, step: 1, unit: '°', slider: true, title: t('Faux italic') }),
     ));
     const caps = pills({
@@ -165,7 +168,7 @@ export function createInspector() {
     const strike = toggle({ label: t('Strikethrough'), iconName: 'strike', value: cs().strike, onChange: (v) => setChar({ strike: v }) });
     const lineColor = colorField({ label: t('Line colour'), value: cs().lineColor, onInput: (v) => setChar({ lineColor: v }, 'char:lc'), onChange: (v) => setChar({ lineColor: v }, 'char:lc') });
     reg(() => { const s = cs(); caps.setValue(s.caps); script.setValue(s.script); under.setValue(s.underline); strike.setValue(s.strike); lineColor.setValue(s.lineColor); });
-    body.appendChild(section({ id: 'ch-case', title: t('Case & position'), iconName: 'caseUpper' }, caps, script, under, strike, lineColor));
+    body.appendChild(section({ id: 'ch-case', title: t('Case & position'), iconName: 'caseUpper', onReset: resetChar(['caps', 'script', 'underline', 'strike', 'lineColor']) }, caps, script, under, strike, lineColor));
 
     const tint = pills({
       class: 'stretch', value: cs().tintMode,
@@ -186,7 +189,7 @@ export function createInspector() {
       tcol.setValue(cs().tintColor);
     }
     reg(refreshTint);
-    body.appendChild(section({ id: 'ch-color', title: t('Colour'), iconName: 'palette' },
+    body.appendChild(section({ id: 'ch-color', title: t('Colour'), iconName: 'palette', onReset: resetChar(['tintMode', 'hue', 'sat', 'light', 'tintColor', 'tintAmount', 'opacity']) },
       h('p.hint', t('Recolour the glyph artwork itself: select letters while typing to colour just those.')), tint, hue, sat, light, tcol, tamt, op));
   }
 
@@ -209,14 +212,15 @@ export function createInspector() {
       onChange: (v) => setPara({ direction: v }),
     });
     reg(() => { const p = ps(); align.setValue(p.align); jl.setValue(p.justifyLast); jl.style.display = p.align === 'justify' ? '' : 'none'; dir.setValue(p.direction); });
-    body.appendChild(section({ id: 'pa-align', title: t('Alignment & direction'), iconName: 'alignLeft' }, align, jl,
+    const resetPara = (keys) => () => { setPara(Object.fromEntries(keys.map((k) => [k, DEFAULT_PARA[k]]))); refresh(); };
+    body.appendChild(section({ id: 'pa-align', title: t('Alignment & direction'), iconName: 'alignLeft', onReset: resetPara(['align', 'justifyLast', 'direction']) }, align, jl,
       h('div.field', h('span', t('Text direction')), dir), h('p.hint', t('Auto picks right-to-left when a paragraph starts with Hebrew.'))));
     const nf = (key, o) => {
-      const f = numberField({ ...o, onInput: (v) => setPara({ [key]: v }, 'para:' + key), onChange: (v) => setPara({ [key]: v }, 'para:' + key) });
+      const f = numberField({ def: DEFAULT_PARA[key], ...o, onInput: (v) => setPara({ [key]: v }, 'para:' + key), onChange: (v) => setPara({ [key]: v }, 'para:' + key) });
       reg(() => f.setValue(ps()[key]));
       return f;
     };
-    body.appendChild(section({ id: 'pa-indent', title: t('Indents'), iconName: 'indentInc' },
+    body.appendChild(section({ id: 'pa-indent', title: t('Indents'), iconName: 'indentInc', onReset: resetPara(['indentStart', 'indentEnd', 'firstIndent']) },
       nf('indentStart', { label: t('Start indent'), iconName: 'indentInc', min: -2000, max: 4000, unit: 'px' }),
       nf('indentEnd', { label: t('End indent'), iconName: 'indentDec', min: -2000, max: 4000, unit: 'px' }),
       nf('firstIndent', { label: t('First line'), iconName: 'pilcrow', min: -2000, max: 4000, unit: 'px' })));
@@ -230,7 +234,7 @@ export function createInspector() {
       onInput: (v) => setPara({ lineValue: v }, 'para:lv'), onChange: (v) => setPara({ lineValue: v }, 'para:lv'),
     });
     reg(() => { const p = ps(); lm.setValue(p.lineMode); lv.setValue(p.lineValue); });
-    body.appendChild(section({ id: 'pa-space', title: t('Spacing'), iconName: 'arrowsV' }, lm, lv,
+    body.appendChild(section({ id: 'pa-space', title: t('Spacing'), iconName: 'arrowsV', onReset: resetPara(['lineMode', 'lineValue', 'spaceBefore', 'spaceAfter', 'wordSpacing']) }, lm, lv,
       nf('spaceBefore', { label: t('Space before'), iconName: 'spaceBefore', min: -2000, max: 4000, unit: 'px' }),
       nf('spaceAfter', { label: t('Space after'), iconName: 'spaceAfter', min: -2000, max: 4000, unit: 'px' }),
       nf('wordSpacing', { label: t('Word spacing'), iconName: 'moveH', min: 0, max: 1000, unit: '%', slider: true, sliderMax: 300 })));
@@ -251,7 +255,7 @@ export function createInspector() {
       onInput: (v) => { checkpoint('project', 'Text box', 'boxw'); layer.box.width = v; projectChanged('layout', layer); }, onChange: () => {},
     });
     reg(() => { mode.setValue(layer.box.mode); bw.setValue(layer.box.width); bw.style.display = layer.box.mode === 'box' ? '' : 'none'; });
-    body.appendChild(section({ id: 'pa-box', title: t('Text box'), iconName: 'wrap' }, mode, bw,
+    body.appendChild(section({ id: 'pa-box', title: t('Text box'), iconName: 'wrap', onReset: () => { checkpoint('project', 'Text box'); layer.box.mode = 'point'; projectChanged('layout', layer); refresh(); } }, mode, bw,
       h('p.hint', t('Point text grows as you type. Area text wraps inside a box you can resize from its side handles.'))));
   }
 
@@ -296,11 +300,12 @@ export function createInspector() {
     const down = iconButton('chevronDown', t('Move down'), () => move(1), { disabled: i === layer.effects.length - 1 });
     const dup = iconButton('copy', t('Duplicate'), () => { checkpoint('project', 'Duplicate effect'); layer.effects.splice(i, 0, { ...JSON.parse(JSON.stringify(fx)), id: newEffect(fx.type).id }); projectChanged('render', layer); build(); });
     const del = iconButton('trash', t('Delete'), () => { checkpoint('project', 'Delete effect'); layer.effects.splice(i, 1); projectChanged('render', layer); build(); });
+    const rst = iconButton('rotateCcw', t('Reset to default'), () => { checkpoint('project', 'Reset effect'); Object.assign(fx, JSON.parse(JSON.stringify(def.defaults))); projectChanged('render', layer); build(); });
     function move(d) { checkpoint('project', 'Reorder effects'); const [x] = layer.effects.splice(i, 1); layer.effects.splice(i + d, 0, x); projectChanged('render', layer); build(); }
-    const card = h('div.fx-item', { class: fx.enabled ? '' : 'off' }, h('div.fx-head', nameBtn, vis, up, down, dup, del), bodyEl);
+    const card = h('div.fx-item', { class: fx.enabled ? '' : 'off' }, h('div.fx-head', nameBtn, vis, up, down, rst, dup, del), bodyEl);
     bodyEl.hidden = !open;
     const set = (k, v, live) => { checkpoint('project', 'Edit effect', 'fx:' + fx.id + k); fx[k] = v; projectChanged('render', layer); if (!live) refresh(); };
-    paramControls(def.params, fx, set, bodyEl, reg);
+    paramControls(def.params, fx, set, bodyEl, reg, def.defaults);
     return card;
   }
 
@@ -313,24 +318,24 @@ export function createInspector() {
       const chip = h('button.warp-chip', { type: 'button', class: w.style === st.id ? 'on' : '', title: L(st.id), on: { click: () => { setW({ style: st.id }); build(); } } }, warpIcon(st.id), h('span', L(st.id)));
       grid.appendChild(chip);
     }
-    body.appendChild(section({ id: 'wp-style', title: t('Warp style'), iconName: 'waves' }, grid));
+    body.appendChild(section({ id: 'wp-style', title: t('Warp style'), iconName: 'waves', onReset: () => { setW({ ...DEFAULT_WARP }); build(); } }, grid));
     if (w.style === 'none') { body.appendChild(h('p.hint', { style: { padding: '12px' } }, t('Pick a warp to bend the whole title like Photoshop’s Warp Text, or a path to set letters along a curve without distorting them.'))); return; }
     const nf = (key, o) => { const f = numberField({ ...o, value: w[key], onInput: (v) => setW({ [key]: v }, 'warp:' + key), onChange: (v) => setW({ [key]: v }, 'warp:' + key) }); reg(() => f.setValue(layer.warp[key])); return f; };
     const isPath = w.style.startsWith('path');
     const controls = [
-      (() => { const f = numberField({ label: t('Bend'), iconName: 'spline', min: -100, max: 100, unit: '%', slider: true, value: Math.round(w.bend * 100), onInput: (v) => setW({ bend: v / 100 }, 'warp:bend'), onChange: (v) => setW({ bend: v / 100 }, 'warp:bend') }); reg(() => f.setValue(Math.round(layer.warp.bend * 100))); return f; })(),
+      (() => { const f = numberField({ label: t('Bend'), iconName: 'spline', def: Math.round(DEFAULT_WARP.bend * 100), min: -100, max: 100, unit: '%', slider: true, value: Math.round(w.bend * 100), onInput: (v) => setW({ bend: v / 100 }, 'warp:bend'), onChange: (v) => setW({ bend: v / 100 }, 'warp:bend') }); reg(() => f.setValue(Math.round(layer.warp.bend * 100))); return f; })(),
     ];
     if (!isPath) {
       controls.push(
-        (() => { const f = numberField({ label: t('Horizontal distortion'), min: -100, max: 100, unit: '%', slider: true, value: Math.round(w.hDistort * 100), onInput: (v) => setW({ hDistort: v / 100 }, 'warp:h'), onChange: (v) => setW({ hDistort: v / 100 }, 'warp:h') }); reg(() => f.setValue(Math.round(layer.warp.hDistort * 100))); return f; })(),
-        (() => { const f = numberField({ label: t('Vertical distortion'), min: -100, max: 100, unit: '%', slider: true, value: Math.round(w.vDistort * 100), onInput: (v) => setW({ vDistort: v / 100 }, 'warp:v'), onChange: (v) => setW({ vDistort: v / 100 }, 'warp:v') }); reg(() => f.setValue(Math.round(layer.warp.vDistort * 100))); return f; })(),
+        (() => { const f = numberField({ label: t('Horizontal distortion'), def: 0, min: -100, max: 100, unit: '%', slider: true, value: Math.round(w.hDistort * 100), onInput: (v) => setW({ hDistort: v / 100 }, 'warp:h'), onChange: (v) => setW({ hDistort: v / 100 }, 'warp:h') }); reg(() => f.setValue(Math.round(layer.warp.hDistort * 100))); return f; })(),
+        (() => { const f = numberField({ label: t('Vertical distortion'), def: 0, min: -100, max: 100, unit: '%', slider: true, value: Math.round(w.vDistort * 100), onInput: (v) => setW({ vDistort: v / 100 }, 'warp:v'), onChange: (v) => setW({ vDistort: v / 100 }, 'warp:v') }); reg(() => f.setValue(Math.round(layer.warp.vDistort * 100))); return f; })(),
         pills({ class: 'stretch', value: w.vertical ? 'v' : 'h', options: [{ value: 'h', label: t('Horizontal'), icon: 'arrowsH' }, { value: 'v', label: t('Vertical'), icon: 'arrowsV' }], onChange: (v) => setW({ vertical: v === 'v' }) }),
       );
     } else if (w.style === 'pathCircle') {
-      controls.push((() => { const a = angleField({ label: t('Start angle'), value: w.pathStart, onInput: (v) => setW({ pathStart: v }, 'warp:ps'), onChange: (v) => setW({ pathStart: v }, 'warp:ps') }); return a; })());
+      controls.push((() => { const a = angleField({ label: t('Start angle'), def: 0, value: w.pathStart, onInput: (v) => setW({ pathStart: v }, 'warp:ps'), onChange: (v) => setW({ pathStart: v }, 'warp:ps') }); return a; })());
     }
     controls.push(button({ label: t('Reset warp'), icon: 'rotateCcw', kind: 'ghost', onClick: () => { setW({ ...DEFAULT_WARP }); build(); } }));
-    body.appendChild(section({ id: 'wp-params', title: t('Warp settings'), iconName: 'sliders' }, ...controls));
+    body.appendChild(section({ id: 'wp-params', title: t('Warp settings'), iconName: 'sliders', onReset: () => { setW({ bend: DEFAULT_WARP.bend, hDistort: 0, vDistort: 0, vertical: false, pathSpacing: 0, pathStart: 0 }); build(); } }, ...controls));
     void nf;
   }
 
@@ -359,14 +364,16 @@ export function createInspector() {
       const children = [grid];
       if (cfg.preset !== 'none') {
         const p = src[cfg.preset];
-        const dur = numberField({ label: t('Duration'), iconName: 'timer', min: 0.01, max: 30, step: 0.05, unit: 's', value: cfg.duration ?? p.duration, onInput: (v) => setA((x) => { x[kind].duration = v; }, 'anim:' + kind + 'd'), onChange: () => {} });
-        const stg = numberField({ label: t('Stagger'), iconName: 'list', min: 0, max: 5, step: 0.005, unit: 's', value: cfg.stagger ?? p.stagger, onInput: (v) => setA((x) => { x[kind].stagger = v; }, 'anim:' + kind + 's'), onChange: () => {} });
+        const dur = numberField({ label: t('Duration'), iconName: 'timer', def: p.duration, min: 0.01, max: 30, step: 0.05, unit: 's', value: cfg.duration ?? p.duration, onInput: (v) => setA((x) => { x[kind].duration = v; }, 'anim:' + kind + 'd'), onChange: () => {} });
+        const stg = numberField({ label: t('Stagger'), iconName: 'list', def: p.stagger, min: 0, max: 5, step: 0.005, unit: 's', value: cfg.stagger ?? p.stagger, onInput: (v) => setA((x) => { x[kind].stagger = v; }, 'anim:' + kind + 's'), onChange: () => {} });
         const unit = pills({ class: 'stretch', value: cfg.unit || p.unit, options: [{ value: 'char', label: t('Letters') }, { value: 'word', label: t('Words') }, { value: 'line', label: t('Lines') }, { value: 'all', label: t('All') }], onChange: (v) => setA((x) => { x[kind].unit = v; }) });
         const order = select({ label: t('Order'), iconName: 'shuffle', value: cfg.order || 'forward', options: ORDERS.map((o) => ({ value: o, label: t({ forward: 'First to last', backward: 'Last to first', center: 'From the centre', edges: 'From the edges', random: 'Random' }[o]) })), onChange: (v) => setA((x) => { x[kind].order = v; }) });
         children.push(h('div.grid2', dur, stg), unit, order);
-        if (kind === 'in') children.push(numberField({ label: t('Delay'), iconName: 'timer', min: 0, max: 60, step: 0.05, unit: 's', value: cfg.delay || 0, onInput: (v) => setA((x) => { x.in.delay = v; }, 'anim:delay'), onChange: () => {} }));
+        if (kind === 'in') children.push(numberField({ label: t('Delay'), iconName: 'timer', def: 0, min: 0, max: 60, step: 0.05, unit: 's', value: cfg.delay || 0, onInput: (v) => setA((x) => { x.in.delay = v; }, 'anim:delay'), onChange: () => {} }));
       }
-      body.appendChild(section({ id: 'an-' + kind, title, iconName, badge: cfg.preset !== 'none' ? t(ANIM_NAMES[cfg.preset] || cfg.preset) : null }, ...children));
+      // reset keeps the chosen preset and puts its timing, unit and order back to the preset's own
+      const onReset = cfg.preset === 'none' ? null : () => { setA((x) => { Object.assign(x[kind], { duration: null, stagger: null, unit: null, order: 'forward' }); if (kind === 'in') x.in.delay = 0; }); build(); };
+      body.appendChild(section({ id: 'an-' + kind, title, iconName, onReset, badge: cfg.preset !== 'none' ? t(ANIM_NAMES[cfg.preset] || cfg.preset) : null }, ...children));
     };
     phaseSection('in', t('Transition in'), 'play', IN_PRESETS);
     // loop
@@ -374,10 +381,10 @@ export function createInspector() {
     const loopKids = [loopGrid];
     if (a.loop.preset !== 'none') {
       loopKids.push(h('div.grid2',
-        numberField({ label: t('Period'), iconName: 'repeat', min: 0.1, max: 20, step: 0.05, unit: 's', value: a.loop.period, onInput: (v) => setA((x) => { x.loop.period = v; }, 'anim:lp'), onChange: () => {} }),
-        numberField({ label: t('Strength'), iconName: 'zap', min: 0, max: 5, step: 0.05, value: a.loop.amount, onInput: (v) => setA((x) => { x.loop.amount = v; }, 'anim:la'), onChange: () => {} })));
+        numberField({ label: t('Period'), iconName: 'repeat', def: DEFAULT_ANIM.loop.period, min: 0.1, max: 20, step: 0.05, unit: 's', value: a.loop.period, onInput: (v) => setA((x) => { x.loop.period = v; }, 'anim:lp'), onChange: () => {} }),
+        numberField({ label: t('Strength'), iconName: 'zap', def: DEFAULT_ANIM.loop.amount, min: 0, max: 5, step: 0.05, value: a.loop.amount, onInput: (v) => setA((x) => { x.loop.amount = v; }, 'anim:la'), onChange: () => {} })));
     }
-    body.appendChild(section({ id: 'an-loop', title: t('While on screen (loop)'), iconName: 'repeat', badge: a.loop.preset !== 'none' ? t(ANIM_NAMES[a.loop.preset]) : null }, ...loopKids));
+    body.appendChild(section({ id: 'an-loop', title: t('While on screen (loop)'), iconName: 'repeat', onReset: a.loop.preset === 'none' ? null : () => { setA((x) => { x.loop.period = DEFAULT_ANIM.loop.period; x.loop.amount = DEFAULT_ANIM.loop.amount; }); build(); }, badge: a.loop.preset !== 'none' ? t(ANIM_NAMES[a.loop.preset]) : null }, ...loopKids));
     phaseSection('out', t('Transition out'), 'skipBack', OUT_PRESETS);
   }
 
@@ -393,12 +400,13 @@ export function createInspector() {
     let link = true;
     const linkBtn = iconButton('link', t('Keep proportions'), () => { link = !link; linkBtn.classList.toggle('on', link); });
     linkBtn.classList.add('on');
-    const sx = numberField({ label: 'W', iconName: 'arrowsH', min: -2000, max: 2000, unit: '%', value: layer.scaleX, onInput: (v) => { const r = layer.scaleX ? v / layer.scaleX : 1; setL(link ? { scaleX: v, scaleY: Math.round(layer.scaleY * r * 10) / 10 } : { scaleX: v }, 'layer:scale'); }, onChange: () => {} });
-    const sy = numberField({ label: 'H', iconName: 'arrowsV', min: -2000, max: 2000, unit: '%', value: layer.scaleY, onInput: (v) => { const r = layer.scaleY ? v / layer.scaleY : 1; setL(link ? { scaleY: v, scaleX: Math.round(layer.scaleX * r * 10) / 10 } : { scaleY: v }, 'layer:scale'); }, onChange: () => {} });
+    const sx = numberField({ label: 'W', iconName: 'arrowsH', def: 100, min: -2000, max: 2000, unit: '%', value: layer.scaleX, onInput: (v) => { const r = layer.scaleX ? v / layer.scaleX : 1; setL(link ? { scaleX: v, scaleY: Math.round(layer.scaleY * r * 10) / 10 } : { scaleX: v }, 'layer:scale'); }, onChange: () => {} });
+    const sy = numberField({ label: 'H', iconName: 'arrowsV', def: 100, min: -2000, max: 2000, unit: '%', value: layer.scaleY, onInput: (v) => { const r = layer.scaleY ? v / layer.scaleY : 1; setL(link ? { scaleY: v, scaleX: Math.round(layer.scaleX * r * 10) / 10 } : { scaleY: v }, 'layer:scale'); }, onChange: () => {} });
     reg(() => { sx.setValue(layer.scaleX); sy.setValue(layer.scaleY); });
-    const rot = angleField({ label: t('Rotation'), value: layer.rotation, onInput: (v) => setL({ rotation: v }, 'layer:rot'), onChange: (v) => setL({ rotation: v }, 'layer:rot') });
+    const rot = angleField({ label: t('Rotation'), def: 0, value: layer.rotation, onInput: (v) => setL({ rotation: v }, 'layer:rot'), onChange: (v) => setL({ rotation: v }, 'layer:rot') });
     reg(() => rot.setValue(layer.rotation));
-    body.appendChild(section({ id: 'ly-transform', title: t('Transform'), iconName: 'move' },
+    // position stays: a title's place on the artboard has no default
+    body.appendChild(section({ id: 'ly-transform', title: t('Transform'), iconName: 'move', onReset: () => { setL({ scaleX: 100, scaleY: 100, rotation: 0 }, null); refresh(); } },
       h('label.field', h('span', t('Name')), name),
       h('div.grid2', nf('x', { label: 'X', min: -100000, max: 100000, unit: 'px' }), nf('y', { label: 'Y', min: -100000, max: 100000, unit: 'px' })),
       h('div.row', h('div.grid2', { style: { flex: 1 } }, sx, sy), linkBtn),
@@ -406,8 +414,8 @@ export function createInspector() {
       button({ label: t('Flip horizontally'), icon: 'flipH', onClick: () => setL({ scaleX: -layer.scaleX }, null) }),
       alignBtns));
     const blend = select({ label: t('Blend mode'), iconName: 'blend', value: layer.blend, options: BLEND_MODES.map((b) => ({ value: b, label: t(blendName(b)) })), onChange: (v) => setL({ blend: v }, null, 'render') });
-    body.appendChild(section({ id: 'ly-look', title: t('Appearance'), iconName: 'droplet' },
-      nf('opacity', { label: t('Opacity'), iconName: 'droplet', min: 0, max: 100, unit: '%', slider: true }, 'render'), blend,
+    body.appendChild(section({ id: 'ly-look', title: t('Appearance'), iconName: 'droplet', onReset: () => { setL({ opacity: 100, blend: 'normal' }, null, 'render'); build(); } },
+      nf('opacity', { label: t('Opacity'), iconName: 'droplet', def: 100, min: 0, max: 100, unit: '%', slider: true }, 'render'), blend,
       toggle({ label: t('Visible'), iconName: 'eye', value: layer.visible, onChange: (v) => setL({ visible: v }, null, 'render') }),
       toggle({ label: t('Locked'), iconName: 'lock', value: layer.locked, onChange: (v) => setL({ locked: v }, null, 'render') })));
     void ab;
@@ -453,12 +461,12 @@ export function scaleEffects(effects, k) {
 }
 
 /** Build controls for a schema of params into `parent`. set(key, value, live). */
-export function paramControls(params, obj, set, parent, reg) {
+export function paramControls(params, obj, set, parent, reg, defaults = {}) {
   for (const p of params) {
     let ctl;
     const label = L(p.key);
-    if (p.type === 'number') ctl = numberField({ label, min: p.min, max: p.max, step: p.step || 1, unit: p.unit, slider: p.slider, sliderMin: p.sliderMin, sliderMax: p.sliderMax, value: obj[p.key], onInput: (v) => set(p.key, v, true), onChange: (v) => set(p.key, v, true) });
-    else if (p.type === 'angle') ctl = angleField({ label, value: obj[p.key], onInput: (v) => set(p.key, v, true), onChange: (v) => set(p.key, v, true) });
+    if (p.type === 'number') ctl = numberField({ label, def: defaults[p.key], min: p.min, max: p.max, step: p.step || 1, unit: p.unit, slider: p.slider, sliderMin: p.sliderMin, sliderMax: p.sliderMax, value: obj[p.key], onInput: (v) => set(p.key, v, true), onChange: (v) => set(p.key, v, true) });
+    else if (p.type === 'angle') ctl = angleField({ label, def: defaults[p.key], value: obj[p.key], onInput: (v) => set(p.key, v, true), onChange: (v) => set(p.key, v, true) });
     else if (p.type === 'color') ctl = colorField({ label, value: obj[p.key], onInput: (v) => set(p.key, v, true), onChange: (v) => set(p.key, v, true) });
     else if (p.type === 'gradient') ctl = gradientField({ stops: obj[p.key], onInput: (v) => set(p.key, v, true), onChange: (v) => set(p.key, v, true) });
     else if (p.type === 'pills') ctl = pills({ class: 'stretch', value: obj[p.key], options: p.options.map((o) => ({ value: o, label: L(o) })), onChange: (v) => set(p.key, v, false) });

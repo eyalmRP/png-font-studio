@@ -21,6 +21,7 @@ for (const file of files) {
   for (const m of src.matchAll(/\bt\(\s*`([^`$]*)`/g)) add(m[1], rel);
   // undo/redo labels are shown through t()
   for (const m of src.matchAll(/checkpoint\([^,()]+,\s*'((?:[^'\\]|\\.)*)'/g)) add(unq(m[1]), rel + ' (undo)');
+  for (const m of src.matchAll(/\b(?:edit|setM|setL|setA|setW)\(\s*'((?:[^'\\]|\\.)*)'/g)) add(unq(m[1]), rel + ' (undo)');
   // tables whose entries are translated where they are shown
   for (const name of ['const LABELS = {', 'const ANIM_NAMES = {', 'export function blendName', 'const GROUP_LABEL = {']) for (const v of values(block(src, name))) add(v, rel + ' (table)');
   for (const m of src.matchAll(/\b(?:label|desc|name):\s*'((?:[^'\\]|\\.)*)'/g)) if (/charsets|export\.js|recolor|titles\.js/.test(rel)) add(unq(m[1]), rel + ' (table)');

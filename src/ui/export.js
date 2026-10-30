@@ -26,7 +26,8 @@ const FORMATS = [
 ];
 
 export async function openExport() {
-  const opts = storeGet('export', { format: 'png', scale: 1, trim: false, background: false, onlySelected: false, loop: true, quality: 'high' });
+  const DEFAULTS = { format: 'png', scale: 1, trim: false, background: false, onlySelected: false, loop: true, quality: 'high' };
+  const opts = storeGet('export', { ...DEFAULTS });
   const dl = await detectDownloads();
   const standalone = !inArtifact();
   const cards = h('div.export-grid');
@@ -68,7 +69,9 @@ export async function openExport() {
   const m = modal({
     title: t('Export'), iconName: 'download', class: 'modal-md',
     body: [cards, optsEl, bar, status, !dl && inArtifact() ? h('p.hint', t('Saving files is not available in this view.')) : null],
-    actions: [button({ label: t('Close'), onClick: () => { cancelled = true; m.close(); } }), go],
+    actions: [
+      button({ label: t('Reset to default'), icon: 'rotateCcw', kind: 'ghost', onClick: () => { Object.assign(opts, DEFAULTS); state.project.fps = 30; syncTiming(); if (!formats.some((f) => f.id === opts.format)) opts.format = formats[0].id; storeSet('export', opts); render(); } }),
+      button({ label: t('Close'), onClick: () => { cancelled = true; m.close(); } }), go],
     onClose: () => { cancelled = true; },
   });
 

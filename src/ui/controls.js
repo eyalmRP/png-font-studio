@@ -39,7 +39,9 @@ export function numberField(o) {
   const input = h('input.nf-input', { type: 'text', inputMode: 'decimal', spellcheck: false, 'aria-label': label || title || '' });
   const up = h('button.nf-spin.nf-up', { type: 'button', tabIndex: -1, title: t('Increase') }, icon('chevronUp', 11));
   const down = h('button.nf-spin.nf-down', { type: 'button', tabIndex: -1, title: t('Decrease') }, icon('chevronDown', 11));
-  const lab = label || iconName ? h('span.nf-label', { title: title || label || '' }, iconName ? icon(iconName, 14) : null, label ? h('span', label) : null) : null;
+  const hasDef = o.def !== undefined && o.def !== null;
+  const tip = (title || label || '') + (hasDef ? ` · ${t('Double-click to reset')} (${o.def}${unit})` : '');
+  const lab = label || iconName ? h('span.nf-label', { title: tip }, iconName ? icon(iconName, 14) : null, label ? h('span', label) : null) : null;
   const box = h('div.nf-box', input, unit ? h('span.nf-unit', unit) : null, h('div.nf-spins', up, down));
   const range = slider ? h('input.nf-slider', { type: 'range', min: sMin, max: sMax, step: o.sliderStep ?? step, tabIndex: -1, 'aria-label': label || title || '' }) : null;
   const el = h('div.nf', { class: o.class || '', title: title || '' }, h('div.nf-row', lab, box), range);
@@ -86,6 +88,8 @@ export function numberField(o) {
     });
   }
   if (lab) scrubbable(lab, false);
+  // double-click the label or the slider to return to the default value
+  if (hasDef) for (const target of [lab, range]) if (target) target.addEventListener('dblclick', (e) => { e.preventDefault(); setLive(o.def, true); });
   scrubbable(input, true);
   // spinners with press-and-hold repeat
   for (const [btn, dir] of [[up, 1], [down, -1]]) {
@@ -137,7 +141,7 @@ export function angleField(o) {
   const knob = h('div.ang-knob');
   const dial = h('div.ang-dial', { title: o.label || t('Angle'), role: 'slider', tabIndex: 0, 'aria-label': o.label || t('Angle') }, knob, h('div.ang-dot'));
   const nf = numberField({
-    label: o.label, iconName: o.iconName, value, min: -360, max: 360, step: 1, unit: '°',
+    label: o.label, iconName: o.iconName, value, min: -360, max: 360, step: 1, unit: '°', def: o.def,
     onInput: (v) => { value = v; draw(); o.onInput && o.onInput(v); },
     onChange: (v) => o.onChange && o.onChange(v),
   });
@@ -148,6 +152,7 @@ export function angleField(o) {
     if (snap) a = Math.round(a / 15) * 15;
     return Math.round(a);
   };
+  if (o.def !== undefined) dial.addEventListener('dblclick', () => { value = o.def; nf.setValue(value); draw(); o.onInput && o.onInput(value); o.onChange && o.onChange(value); });
   dial.addEventListener('pointerdown', (e) => {
     dial.setPointerCapture(e.pointerId);
     const set = (ev, commit) => { value = fromEvent(ev, ev.shiftKey); nf.setValue(value); draw(); o.onInput && o.onInput(value); if (commit) o.onChange && o.onChange(value); };
@@ -213,7 +218,8 @@ export function section(o, ...children) {
     o.iconName ? icon(o.iconName, 15) : null,
     h('span.sec-title', o.title),
     o.badge ? h('span.sec-badge', o.badge) : null);
-  const actions = h('div.sec-actions', o.actions || []);
+  const reset = o.onReset ? iconButton('rotateCcw', o.resetLabel || t('Reset to default'), () => o.onReset(), { class: 'sec-reset' }) : null;
+  const actions = h('div.sec-actions', ...(o.actions || []), reset);
   const el = h('section.sec', { class: o.class || '' }, h('div.sec-top', head, actions), body);
   const render = () => { el.classList.toggle('open', open); head.setAttribute('aria-expanded', open); };
   head.addEventListener('click', () => { open = !open; storeSet(key, open); render(); });

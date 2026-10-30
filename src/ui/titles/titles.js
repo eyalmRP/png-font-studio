@@ -2,7 +2,7 @@
 import { h, clear, icon, storeSet } from '../dom.js';
 import { t, ltr } from '../i18n.js';
 import { section, iconButton, button, numberField, pills, colorField, select, menu } from '../controls.js';
-import { state, on, emit, selectLayer, checkpoint, projectChanged, newTextLayer, selectedLayer } from '../../app/store.js';
+import { state, on, emit, selectLayer, checkpoint, projectChanged, newTextLayer, selectedLayer, createProject } from '../../app/store.js';
 import { createStage } from './stage.js';
 import { createInspector } from './inspector.js';
 import { createPlayer } from './player.js';
@@ -46,7 +46,15 @@ export function mountTitles({ left, right, center, exportSlot, sizes, applySizes
   const bgP = pills({ class: 'stretch', value: ab.bg, options: [{ value: 'transparent', label: t('Transparent') }, { value: 'color', label: t('Colour') }], onChange: (v) => { checkpoint('project', 'Background'); state.project.artboard.bg = v; projectChanged(); bgC.style.display = v === 'color' ? '' : 'none'; } });
   const bgC = colorField({ label: t('Background'), value: ab.bgColor, onInput: (v) => { state.project.artboard.bgColor = v; projectChanged(); }, onChange: () => {} });
   bgC.style.display = ab.bg === 'color' ? '' : 'none';
-  const abSec = section({ id: 'artboard', title: t('Artboard'), iconName: 'crop' }, sizeSel, h('div.grid2', wF, hF), bgP, bgC,
+  const resetArtboard = () => {
+    const d = createProject().artboard;
+    if (state.project.artboard.w !== d.w || state.project.artboard.h !== d.h) setArtboard(d.w, d.h);
+    checkpoint('project', 'Background');
+    Object.assign(state.project.artboard, { bg: d.bg, bgColor: d.bgColor });
+    bgP.setValue(d.bg); bgC.setValue(d.bgColor); bgC.style.display = 'none';
+    projectChanged();
+  };
+  const abSec = section({ id: 'artboard', title: t('Artboard'), iconName: 'crop', onReset: resetArtboard }, sizeSel, h('div.grid2', wF, hF), bgP, bgC,
     h('p.hint', t('Transparent exports keep the alpha channel. The background colour is used only when you choose to include it.')));
   const fileSec = section({ id: 'title-file', title: t('Title file'), iconName: 'save' },
     h('div.row-ctl', button({ label: t('Save title'), icon: 'save', onClick: () => saveProject() }), button({ label: t('Open title'), icon: 'open', onClick: () => openProject() })),

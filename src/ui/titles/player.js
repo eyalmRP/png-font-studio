@@ -38,7 +38,7 @@ export function createPlayer() {
   let loopOn = storeGet('loop', true);
   const loopT = toggle({ label: t('Loop'), iconName: 'repeat', value: loopOn, onChange: (v) => { loopOn = v; storeSet('loop', v); } });
   const hold = numberField({
-    label: t('Hold'), iconName: 'timer', min: 0, max: 120, step: 0.1, unit: 's', value: state.project.hold ?? 1.5,
+    label: t('Hold'), iconName: 'timer', def: 1.5, min: 0, max: 120, step: 0.1, unit: 's', value: state.project.hold ?? 1.5,
     title: t('How long the title stays on screen between its entrance and its exit'),
     onInput: (v) => { checkpoint('project', 'Hold time', 'hold'); state.project.hold = v; refresh(); emit('project', { what: 'timing' }); }, onChange: () => {},
   });

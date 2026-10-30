@@ -103,7 +103,8 @@ export function mountFonts({ left, right, center, exportSlot }) {
   function buildRecolor() {
     // face mode recolours only the letter face (one colour range) and keeps a 3D base, outline and highlights
     let mode = 'face', hue = 160, sat = 0, light = 0;
-    let stops = [{ pos: 0, color: '#3a0a5c' }, { pos: 0.55, color: '#ff4fa3' }, { pos: 1, color: '#fff3b0' }];
+    const MAP_STOPS = [{ pos: 0, color: '#3a0a5c' }, { pos: 0.55, color: '#ff4fa3' }, { pos: 1, color: '#fff3b0' }];
+    let stops = MAP_STOPS.map((x) => ({ ...x }));
     let face = { hue: 205, width: 38, soft: 30 };
     let faceStops = FACE_PRESETS[0].stops.map((x) => ({ ...x }));
     let presetName = FACE_PRESETS[0].name;
@@ -117,8 +118,8 @@ export function mountFonts({ left, right, center, exportSlot }) {
     };
     const preview = h('canvas');
     const hueF = numberField({ label: t('Hue'), min: -180, max: 180, unit: '°', slider: true, value: hue, onInput: (v) => { hue = v; drawPrev(); }, onChange: () => {} });
-    const satF = numberField({ label: t('Saturation'), min: -100, max: 100, unit: '%', slider: true, value: sat, onInput: (v) => { sat = v; drawPrev(); }, onChange: () => {} });
-    const lightF = numberField({ label: t('Lightness'), min: -100, max: 100, unit: '%', slider: true, value: light, onInput: (v) => { light = v; drawPrev(); }, onChange: () => {} });
+    const satF = numberField({ label: t('Saturation'), def: 0, min: -100, max: 100, unit: '%', slider: true, value: sat, onInput: (v) => { sat = v; drawPrev(); }, onChange: () => {} });
+    const lightF = numberField({ label: t('Lightness'), def: 0, min: -100, max: 100, unit: '%', slider: true, value: light, onInput: (v) => { light = v; drawPrev(); }, onChange: () => {} });
     const grad = gradientField({ stops, onInput: (v) => { stops = v; drawPrev(); }, onChange: (v) => { stops = v; drawPrev(); } });
     // face mode controls
     const faceGrad = gradientField({ stops: faceStops, onInput: (v) => { faceStops = v; presetName = t('Custom'); palette = null; syncFace(); drawPrev(); }, onChange: (v) => { faceStops = v; drawPrev(); } });
@@ -128,8 +129,8 @@ export function mountFonts({ left, right, center, exportSlot }) {
     }, h('span', { style: { display: 'block', height: '14px', borderRadius: '4px', background: `linear-gradient(90deg, ${pr.stops.map((x) => x.color).join(', ')})` } }), t(pr.name))));
     presetGrid.firstChild.classList.add('on');
     const faceHue = numberField({ label: t('Face colour'), iconName: 'pipette', min: 0, max: 360, unit: '°', slider: true, value: face.hue, title: t('The colour of the letter face to replace'), onInput: (v) => { face.hue = v; swatch(); drawPrev(); }, onChange: () => {} });
-    const faceWidth = numberField({ label: t('Range'), min: 5, max: 90, unit: '°', slider: true, value: face.width, title: t('How far from that colour still counts as the face'), onInput: (v) => { face.width = v; drawPrev(); }, onChange: () => {} });
-    const faceSoft = numberField({ label: t('Softness'), min: 0, max: 90, unit: '°', slider: true, value: face.soft, onInput: (v) => { face.soft = v; drawPrev(); }, onChange: () => {} });
+    const faceWidth = numberField({ label: t('Range'), def: 38, min: 5, max: 90, unit: '°', slider: true, value: face.width, title: t('How far from that colour still counts as the face'), onInput: (v) => { face.width = v; drawPrev(); }, onChange: () => {} });
+    const faceSoft = numberField({ label: t('Softness'), def: 30, min: 0, max: 90, unit: '°', slider: true, value: face.soft, onInput: (v) => { face.soft = v; drawPrev(); }, onChange: () => {} });
     const hueSw = h('span', { style: { width: '22px', height: '22px', borderRadius: '50%', border: '1px solid var(--line-strong)', flex: 'none' } });
     const swatch = () => { hueSw.style.background = `hsl(${face.hue}, 90%, 50%)`; };
     const detectBtn = button({ label: t('Find face colour'), icon: 'wand', onClick: () => { const f = currentFont(); if (f) { face.hue = dominantHue(f); faceHue.setValue(face.hue); swatch(); drawPrev(); } } });
@@ -178,11 +179,24 @@ export function mountFonts({ left, right, center, exportSlot }) {
       if (asNew) { addFont(target); saveFontRecord(target); toast(t('Created {name}', { name: target.name }), 'ok'); }
       else { fontChanged(target); emit('fonts'); }
     };
+    // back to how the panel opens: Face colour with the first preset, measured on the current font
+    const resetRecolor = () => {
+      mode = 'face'; hue = 160; sat = 0; light = 0;
+      stops = MAP_STOPS.map((x) => ({ ...x }));
+      const pr = FACE_PRESETS[0];
+      faceStops = pr.stops.map((x) => ({ ...x })); presetName = t(pr.name); palette = pr.palette || paletteFromStops(pr.stops);
+      const f = currentFont();
+      face = { hue: f ? dominantHue(f) : 205, width: 38, soft: 30 };
+      modeP.setValue(mode); hueF.setValue(hue); satF.setValue(sat); lightF.setValue(light); grad.setValue(stops); faceGrad.setValue(faceStops);
+      faceHue.setValue(face.hue); faceWidth.setValue(face.width); faceSoft.setValue(face.soft);
+      for (const b of presetGrid.children) b.classList.toggle('on', b === presetGrid.firstChild);
+      sync(); swatch(); syncFace(); drawPrev();
+    };
     sync(); swatch(); syncFace();
     offs.push(on('fonts', () => { const f = currentFont(); if (f && f.id !== lastFontId) { lastFontId = f.id; face.hue = dominantHue(f); faceHue.setValue(face.hue); swatch(); } drawPrev(); }));
     let lastFontId = null;
     setTimeout(() => { const f = currentFont(); if (f) { lastFontId = f.id; face.hue = dominantHue(f); faceHue.setValue(face.hue); swatch(); } drawPrev(); }, 50);
-    return section({ id: 'fonts-recolor', title: t('Colour variants'), iconName: 'palette', open: false },
+    return section({ id: 'fonts-recolor', title: t('Colour variants'), iconName: 'palette', open: false, onReset: resetRecolor },
       h('p.hint', t('Make a new colour version of the whole font from its artwork, no new sheets needed. A preset recolours the face, rim and 3D depth together; editing the gradient changes only the letter face.')),
       modeP, faceBox, hueF, satF, lightF, grad, preview,
       h('div.row-ctl', button({ label: t('Create variant'), icon: 'plus', kind: 'primary', onClick: () => make(true) }), button({ label: t('Apply to this font'), icon: 'brush', onClick: () => make(false) })));
@@ -436,9 +450,9 @@ export function mountFonts({ left, right, center, exportSlot }) {
     } } });
     const fields = {
       baseline: numberField({ label: t('Baseline'), iconName: 'baseline', step: 1, unit: 'px', title: t('Distance from the top of the image down to the baseline'), onInput: (v) => edit('Baseline', (x) => { x.baseline = v / x.scale; x.autoBaseline = false; }, 'gb'), onChange: () => {} }),
-      lsb: numberField({ label: t('Left'), iconName: 'moveH', step: 1, unit: 'px', title: t('Left side bearing'), onInput: (v) => edit('Spacing', (x) => { x.lsb = v; }, 'gl'), onChange: () => {} }),
-      rsb: numberField({ label: t('Right'), iconName: 'moveH', step: 1, unit: 'px', title: t('Right side bearing'), onInput: (v) => edit('Spacing', (x) => { x.rsb = v; }, 'gr'), onChange: () => {} }),
-      scale: numberField({ label: t('Scale'), iconName: 'zoomIn', min: 5, max: 1000, step: 1, unit: '%', onInput: (v) => edit('Scale', (x) => { const top = x.baseline * x.scale; x.scale = v / 100; x.autoScale = false; x.baseline = top / x.scale; }, 'gs'), onChange: () => {} }),
+      lsb: numberField({ label: t('Left'), iconName: 'moveH', def: 0, step: 1, unit: 'px', title: t('Left side bearing'), onInput: (v) => edit('Spacing', (x) => { x.lsb = v; }, 'gl'), onChange: () => {} }),
+      rsb: numberField({ label: t('Right'), iconName: 'moveH', def: 0, step: 1, unit: 'px', title: t('Right side bearing'), onInput: (v) => edit('Spacing', (x) => { x.rsb = v; }, 'gr'), onChange: () => {} }),
+      scale: numberField({ label: t('Scale'), iconName: 'zoomIn', def: Math.round((g.baseScale || 1) * 1000) / 10, min: 5, max: 1000, step: 1, unit: '%', onInput: (v) => edit('Scale', (x) => { const top = x.baseline * x.scale; x.scale = v / 100; x.autoScale = false; x.baseline = top / x.scale; }, 'gs'), onChange: () => {} }),
     };
     const autoT = toggle({ label: t('Place automatically'), iconName: 'wand', value: g.autoBaseline, onChange: (v) => { edit('Auto place', (x) => { x.autoBaseline = v; }); if (v) { autoMetrics(font); afterFontEdit(font); } } });
     const detected = { both: 'round top and bottom', top: 'round top', bottom: 'round bottom' }[glyphRound({ ...g, round: null })] || 'flat';
@@ -462,7 +476,12 @@ export function mountFonts({ left, right, center, exportSlot }) {
       button({ label: t('Clear image'), icon: 'squareDashed', onClick: () => { checkpoint('font:' + font.id, 'Clear glyph'); g.image = null; g.rev++; touch(font); afterFontEdit(font); } }),
       button({ label: t('Delete glyph'), icon: 'trash', kind: 'danger', onClick: () => deleteGlyphs([ch]) }),
     );
-    return section({ id: 'glyph', title: t('Glyph'), iconName: 'shapes' }, head, pv,
+    // reset: placed automatically again, no extra spacing, its imported size unless the font evened it out
+    const resetGlyph = () => {
+      edit('Reset glyph', (x) => { x.autoBaseline = true; x.round = null; x.lsb = 0; x.rsb = 0; if (!x.autoScale) x.scale = x.baseScale || 1; });
+      autoMetrics(font); afterFontEdit(font); renderInspector();
+    };
+    return section({ id: 'glyph', title: t('Glyph'), iconName: 'shapes', onReset: resetGlyph, resetLabel: t('Reset placement, spacing and size') }, head, pv,
       h('label.field', h('span', t('Character (type another to remap or swap)')), charInput),
       h('div.grid2', fields.baseline, fields.scale, fields.lsb, fields.rsb), autoT, roundSel,
       h('p.hint', t('Drag the glyph to move it, the dotted right line to change its spacing. Shift locks vertical, Alt locks horizontal.')),
@@ -479,13 +498,14 @@ export function mountFonts({ left, right, center, exportSlot }) {
     const space = numberField({ label: t('Space width'), iconName: 'arrowsH', min: 0, max: 2000, unit: 'u', value: Math.round(font.spacing.space), onInput: (v) => setM('Space', (fo) => { fo.spacing.space = v; fo.spacing.autoSpace = false; touch(fo); }, 'msp'), onChange: () => {} });
     const name = h('input.text-input', { type: 'text', value: font.name, 'aria-label': t('Font name'), on: { keydown: (e) => e.stopPropagation(), change: (e) => setM('Rename font', (fo) => { fo.name = e.target.value || fo.name; emit('fonts'); }) } });
     const glyphCount = [...font.glyphs.values()].filter((g) => g.image).length;
-    return section({ id: 'font-metrics', title: t('Font'), iconName: 'settings' },
+    const remeasure = () => setM('Auto metrics', (fo) => { fo.metrics.auto = true; fo.metrics.overshootAuto = true; fo.spacing.autoSpace = true; autoMetrics(fo, { force: true }); });
+    return section({ id: 'font-metrics', title: t('Font'), iconName: 'settings', onReset: remeasure, resetLabel: t('Reset to the measured values') },
       h('label.field', h('span', t('Name')), name),
       h('p.hint', t('{n} glyphs · units are source pixels', { n: glyphCount })),
       h('div.grid2', mf('capHeight', t('Cap height'), 'caseUpper'), mf('xHeight', t('x-height'), 'caseLower'), mf('ascender', t('Ascender'), 'spaceBefore'), mf('descender', t('Descender'), 'spaceAfter')),
       h('div.grid2', os, space),
       h('div.tool-grid',
-        button({ label: t('Auto-place all'), icon: 'wand', onClick: () => setM('Auto metrics', (fo) => { fo.metrics.auto = true; fo.metrics.overshootAuto = true; fo.spacing.autoSpace = true; autoMetrics(fo, { force: true }); }) }),
+        button({ label: t('Auto-place all'), icon: 'wand', onClick: remeasure }),
         button({ label: t('Even out sizes'), icon: 'arrowsV', onClick: () => setM('Even out sizes', (fo) => { const ch = normalizeSizes(fo); autoMetrics(fo); toast(ch.length ? t('Resized {n} glyphs: {list}', { n: ch.length, list: ch.map((c) => c.char).join(' ') }) : t('Sizes are already even'), 'ok', 4000); }) }),
         button({ label: t('Save font file'), icon: 'save', onClick: () => saveFontFile(font) }),
       ),

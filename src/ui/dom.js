@@ -34,6 +34,8 @@ export const ICONS = {
   zap: Zap, briefcase: Briefcase, smile: Smile, party: PartyPopper, timer: Timer, hash: Hash, caseUpper: CaseUpper,
   caseLower: CaseLower, wrap: WrapText, letters: LetterText, combine: Combine, scissors: Scissors, pipette: Pipette,
   contrast: Contrast, brush: Paintbrush, layers2: Layers2, layout: LayoutGrid, cloud: Cloud,
+  // a hollow capital A: outlined text, for the stroke effect (lucide has none)
+  outlineText: ['svg', Square[1], [['path', { d: 'M3 21 10 3h4l7 18h-4.5l-1.3-3.5H8.8L7.5 21Z' }], ['path', { d: 'M10.1 14h3.8L12 8.6Z' }]]],
 };
 
 const SVG_NS = 'http://www.w3.org/2000/svg';

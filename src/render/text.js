@@ -1,5 +1,6 @@
 // Draw laid-out text: per-character style transforms, animation ops (around unit pivots) and path placement.
 import { glyphCanvas, canvasFilterSupported } from './glyphs.js';
+import { paddedBlur } from './effects.js';
 import { unitIndex } from '../core/anim.js';
 import { isPathWarp, pathPlacer } from '../core/warp.js';
 import { hexToRgb } from '../ui/controls.js';
@@ -139,7 +140,8 @@ export function drawPrepared(ctx, prep, base, opts = {}) {
       if (it.level & 1) ctx.rect(r.x + r.w - w, r.y - r.h, w, r.h * 3); else ctx.rect(r.x, r.y - r.h, w, r.h * 3);
       ctx.clip();
     }
-    if (d.canvas) ctx.drawImage(d.canvas, r.x, r.y, r.w, r.h);
+    if (d.canvas && !filters && (d.blur > 0.05 || d.bright > 0.005)) drawUnfiltered(ctx, d, base);
+    else if (d.canvas) ctx.drawImage(d.canvas, r.x, r.y, r.w, r.h);
     else if (d.missing && opts.showMissing) {
       ctx.globalAlpha = 0.6;
       ctx.setLineDash([6, 5]);
@@ -162,6 +164,30 @@ export function drawPrepared(ctx, prep, base, opts = {}) {
   }
   ctx.filter = 'none';
   ctx.globalAlpha = 1;
+}
+
+/** Animated blur and brightness without canvas filters (Safari): a pre-blurred image and an added copy. */
+function drawUnfiltered(ctx, d, base) {
+  const r = d.rect, c = d.canvas;
+  let img = c, x = r.x, y = r.y, w = r.w, h = r.h;
+  if (d.blur > 0.05) {
+    const T = ctx.getTransform();
+    const sigma = (d.blur * Math.hypot(base.a, base.b)) / Math.max(1e-6, Math.hypot(T.a, T.b) * (r.w / c.width)); // in image px
+    if (sigma >= 0.25) {
+      const b = paddedBlur(c, sigma);
+      const kx = r.w / c.width, ky = r.h / c.height;
+      img = b.canvas; x -= b.pad * kx; y -= b.pad * ky; w += 2 * b.pad * kx; h += 2 * b.pad * ky;
+    }
+  }
+  ctx.drawImage(img, x, y, w, h);
+  if (d.bright > 0.005) {
+    // brightness(1 + b) for b > 0: add b times the letter on top of itself
+    const ga = ctx.globalAlpha, op = ctx.globalCompositeOperation;
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.globalAlpha = ga * Math.min(1, d.bright);
+    ctx.drawImage(img, x, y, w, h);
+    ctx.globalAlpha = ga; ctx.globalCompositeOperation = op;
+  }
 }
 
 function roundRect(ctx, x, y, w, h) {

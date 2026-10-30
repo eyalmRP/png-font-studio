@@ -9,7 +9,7 @@ const SUNSET = [{ pos: 0, color: '#ffe066' }, { pos: 1, color: '#ff4d6d' }];
 // placement: 'behind' draws under the text, 'content' modifies the text pixels, 'top' draws over, 'post' filters all.
 export const EFFECTS = {
   stroke: {
-    icon: 'square', placement: (p) => (p.position === 'outside' ? 'behind' : p.position === 'inside' ? 'content' : 'top'),
+    icon: 'outlineText', placement: (p) => (p.position === 'outside' ? 'behind' : p.position === 'inside' ? 'content' : 'top'),
     defaults: { position: 'outside', size: 10, fill: 'color', color: '#ffffff', gradient: SUNSET, gradAngle: 90, opacity: 100, soft: 0 },
     params: [
       { key: 'position', type: 'pills', options: ['outside', 'center', 'inside'] },

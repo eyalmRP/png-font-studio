@@ -23,6 +23,7 @@ export function createStage() {
   const safeBtn = iconButton('scan', t('Title-safe guides'), () => { state.project.artboard.safe = !state.project.artboard.safe; safeBtn.classList.toggle('on', state.project.artboard.safe); request(); });
   // preview background: only for looking at the title; exports stay transparent unless the artboard has a colour
   let stageBg = storeGet('stageBg', 'checker');
+  let layerBuf = null; // titles composited on their own over a transparent artboard
   const showStageBg = () => { bgSwatch.style.background = stageBg === 'checker' ? '' : stageBg; bgBtn.classList.toggle('on', stageBg !== 'checker'); };
   const setStageBg = (v) => { stageBg = v; storeSet('stageBg', v); showStageBg(); request(); };
   const bgPicker = h('input', { type: 'color', value: stageBg.startsWith('#') ? stageBg : '#20193a', 'aria-label': t('Custom colour…'), tabIndex: -1, style: { position: 'absolute', width: '1px', height: '1px', opacity: 0, pointerEvents: 'none', insetInlineStart: '50%', top: '40px' }, on: { input: (e) => setStageBg(e.target.value) } });
@@ -166,9 +167,19 @@ export function createStage() {
       ctx.fill();
     }
     ctx.restore();
-    // layers (clipped to the artboard edge lightly: draw outside at reduced opacity)
+    // layers (clipped to the artboard edge lightly: draw outside at reduced opacity). On a transparent artboard
+    // they are composited on their own first, so blend modes act as in the exported file, not on the preview backdrop.
     ctx.save();
-    drawLayers(ctx, state.project, state.time, base, { showMissing: true });
+    if (ab.bg === 'color') drawLayers(ctx, state.project, state.time, base, { showMissing: true });
+    else {
+      if (!layerBuf || layerBuf.width !== canvas.width || layerBuf.height !== canvas.height) { layerBuf = document.createElement('canvas'); layerBuf.width = canvas.width; layerBuf.height = canvas.height; }
+      const lctx = layerBuf.getContext('2d');
+      lctx.setTransform(1, 0, 0, 1, 0, 0);
+      lctx.clearRect(0, 0, layerBuf.width, layerBuf.height);
+      drawLayers(lctx, state.project, state.time, base, { showMissing: true });
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.drawImage(layerBuf, 0, 0);
+    }
     ctx.restore();
     // dim outside the artboard
     ctx.save();

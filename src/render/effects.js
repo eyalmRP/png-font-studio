@@ -26,19 +26,43 @@ export function blurCanvas(c, size) {
     x.drawImage(c, 0, 0);
     return out;
   }
+  // no canvas filters (Safari): box-blur premultiplied colour, so transparent pixels don't pull colours to black
   const ctx = ctx2d(c);
   const d = ctx.getImageData(0, 0, c.width, c.height);
   const W = c.width, H = c.height, n = W * H;
-  const r = Math.max(1, Math.round(sigma * 1.2));
-  for (let ch = 0; ch < 4; ch++) {
+  const r = Math.max(1, Math.round(Math.sqrt(sigma * sigma + 0.25) - 0.5)); // 3 box passes of radius r ≈ σ of r + ½
+  const al = new Float32Array(n);
+  for (let i = 0; i < n; i++) al[i] = d.data[i * 4 + 3];
+  const chans = [0, 1, 2].map((ch) => {
     const f = new Float32Array(n);
-    for (let i = 0; i < n; i++) f[i] = d.data[i * 4 + ch];
-    boxBlur(f, W, H, r, 3);
-    for (let i = 0; i < n; i++) d.data[i * 4 + ch] = f[i];
+    for (let i = 0; i < n; i++) f[i] = d.data[i * 4 + ch] * al[i];
+    return boxBlur(f, W, H, r, 3);
+  });
+  boxBlur(al, W, H, r, 3);
+  for (let i = 0; i < n; i++) {
+    const a = al[i];
+    d.data[i * 4 + 3] = a;
+    for (let ch = 0; ch < 3; ch++) d.data[i * 4 + ch] = a > 0.01 ? chans[ch][i] / a : 0;
   }
   const out = makeCanvas(W, H);
   out.getContext('2d').putImageData(d, 0, 0);
   return out;
+}
+
+const blurred = new WeakMap(); // source canvas → Map(sigma → { canvas, pad })
+/** A canvas blurred by sigma px, padded so the blur isn't cut off: { canvas, pad } with pad in source px. */
+export function paddedBlur(src, sigma) {
+  const s = Math.max(0.5, Math.round(sigma * 2) / 2);
+  let m = blurred.get(src);
+  if (!m) { m = new Map(); blurred.set(src, m); }
+  let r = m.get(s);
+  if (!r) {
+    const pad = Math.ceil(s * 3);
+    r = { canvas: blurCanvas(copyCanvas(src, src.width + pad * 2, src.height + pad * 2, pad, pad), s * 2.4), pad };
+    if (m.size >= 24) m.delete(m.keys().next().value);
+    m.set(s, r);
+  }
+  return r;
 }
 
 function alphaToCanvas(alpha, W, H, rgb, opacity = 1) {
@@ -93,6 +117,9 @@ function coverageCanvas(cov, W, H, e, box, fillKey = 'color') {
 
 /**
  * Apply effects. src: canvas; scale: px per artboard px. Returns { canvas, ox, oy } — src's origin inside canvas.
+ * When an effect behind the text has a blend mode (a screen glow, a multiply shadow) and nothing filters the whole
+ * result, it also returns `passes` (each behind effect as { canvas, dx, dy, alpha, blend }, bottom first) and `main`
+ * (the text with its other effects), so the effects can blend with what lies under the layer, as in Photoshop.
  */
 export function applyEffects(src, effects, scale) {
   const list = (effects || []).filter((e) => e.enabled && EFFECTS[e.type]);
@@ -140,16 +167,22 @@ export function applyEffects(src, effects, scale) {
   // ---- behind effects ----
   const out = makeCanvas(W, H);
   const octx = out.getContext('2d');
+  const passes = [];
   for (const e of [...behind].reverse()) {
     const r = behindLayer(e, { W, H, base, mask, getAlpha, getOut, getBox, scale });
     if (!r) continue;
+    const alpha = Math.min(1, (e.opacity ?? 100) / 100);
     octx.save();
-    octx.globalAlpha = Math.min(1, (e.opacity ?? 100) / 100);
+    octx.globalAlpha = alpha;
     octx.globalCompositeOperation = blendOp(e.blend);
     octx.drawImage(r.canvas, r.dx || 0, r.dy || 0);
     octx.restore();
+    passes.push({ canvas: r.canvas, dx: r.dx || 0, dy: r.dy || 0, alpha, blend: blendOp(e.blend) });
   }
+  const split = !final.length && passes.some((p) => p.blend !== 'source-over');
+  const main = split ? makeCanvas(W, H) : null;
   octx.drawImage(base, 0, 0);
+  if (main) main.getContext('2d').drawImage(base, 0, 0);
 
   // ---- top effects (centre stroke) ----
   for (const e of [...top].reverse()) {
@@ -162,10 +195,12 @@ export function applyEffects(src, effects, scale) {
     }
     let c = coverageCanvas(cov, W, H, e, getBox());
     if (e.soft) c = blurCanvas(c, e.soft * scale);
-    octx.save();
-    octx.globalAlpha = e.opacity / 100;
-    octx.drawImage(c, 0, 0);
-    octx.restore();
+    for (const x of main ? [octx, main.getContext('2d')] : [octx]) {
+      x.save();
+      x.globalAlpha = e.opacity / 100;
+      x.drawImage(c, 0, 0);
+      x.restore();
+    }
   }
 
   // ---- final filters ----
@@ -177,7 +212,7 @@ export function applyEffects(src, effects, scale) {
       result = r;
     }
   }
-  return { canvas: result, ox, oy };
+  return split ? { canvas: result, ox, oy, passes, main } : { canvas: result, ox, oy };
 }
 
 function contentLayer(e, { W, H, base, getAlpha, getIn, getBox, scale }) {
@@ -308,19 +343,25 @@ function behindLayer(e, { W, H, base, mask, getAlpha, getOut, getBox, scale }) {
       if (e.soft) c = blurCanvas(c, e.soft * scale);
       return { canvas: c };
     }
-    case 'dropShadow':
     case 'outerGlow': {
+      // full strength at the edge (and over the spread), fading out by `size` as Photoshop's glow does;
+      // a blur would start at half strength right at the edge and read as a faint rim
+      const size = Math.max(0.5, e.size * scale);
+      const spread = (e.spread / 100) * size;
+      const sigma = Math.max(0.5, size - spread) / 2.5;
+      const a = getAlpha(), dO = getOut();
+      const cov = new Float32Array(W * H);
+      for (let i = 0; i < W * H; i++) {
+        const d = dO[i] - spread;
+        cov[i] = Math.max(a[i], d <= 0 ? 1 : Math.exp((-d * d) / (2 * sigma * sigma)));
+      }
+      return { canvas: alphaToCanvas(cov, W, H, hexToRgb(e.color)) };
+    }
+    case 'dropShadow': {
       const size = e.size * scale;
       const spread = (e.spread / 100) * size;
       const cov = dilated(getAlpha, getOut, W, H, spread);
-      let c = alphaToCanvas(cov, W, H, hexToRgb(e.color));
-      c = blurCanvas(c, Math.max(0, size - spread));
-      if (e.type === 'outerGlow') {
-        // glows read stronger when the blurred falloff is lifted slightly
-        const x = c.getContext('2d');
-        x.globalCompositeOperation = 'source-over'; x.globalAlpha = 0.35; x.drawImage(c, 0, 0);
-        return { canvas: c };
-      }
+      const c = blurCanvas(alphaToCanvas(cov, W, H, hexToRgb(e.color)), Math.max(0, size - spread));
       const ang = rad(e.angle), dist = e.distance * scale;
       return { canvas: c, dx: -Math.cos(ang) * dist, dy: Math.sin(ang) * dist };
     }

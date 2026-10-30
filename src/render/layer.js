@@ -72,13 +72,16 @@ export function renderLayer(layer, time, scale, opts = {}) {
     canvas = w.canvas; rect = w.rect;
   }
   const contentRect = rect;
+  let passes = null, main = null;
   if (layer.effects && layer.effects.some((e) => e.enabled)) {
     const fx = applyEffects(canvas, layer.effects, s);
     rect = { x: rect.x - fx.ox / s, y: rect.y - fx.oy / s, w: fx.canvas.width / s, h: fx.canvas.height / s };
     canvas = fx.canvas;
+    if (fx.passes) { passes = fx.passes; main = fx.main; }
   }
   c.renderKey = key;
-  c.result = { canvas, rect, contentRect, layout, anim };
+  // canvas is the whole layer; passes + main (when set) let effect blend modes reach the layers underneath
+  c.result = { canvas, rect, contentRect, layout, anim, passes, main };
   return c.result;
 }
 
@@ -96,10 +99,19 @@ export function drawLayers(ctx, project, time, base, opts = {}) {
     if (!r) continue;
     ctx.save();
     ctx.setTransform(base.multiply(M));
+    ctx.imageSmoothingQuality = 'high';
+    if (r.passes) {
+      // effects behind the text blend with what is already drawn (a screen glow brightens the background)
+      const k = r.rect.w / r.canvas.width;
+      for (const p of r.passes) {
+        ctx.globalAlpha = (layer.opacity / 100) * p.alpha;
+        ctx.globalCompositeOperation = p.blend;
+        ctx.drawImage(p.canvas, r.rect.x + p.dx * k, r.rect.y + p.dy * k, p.canvas.width * k, p.canvas.height * k);
+      }
+    }
     ctx.globalAlpha = layer.opacity / 100;
     ctx.globalCompositeOperation = !layer.blend || layer.blend === 'normal' ? 'source-over' : layer.blend;
-    ctx.imageSmoothingQuality = 'high';
-    ctx.drawImage(r.canvas, r.rect.x, r.rect.y, r.rect.w, r.rect.h);
+    ctx.drawImage(r.main || r.canvas, r.rect.x, r.rect.y, r.rect.w, r.rect.h);
     ctx.restore();
   }
 }

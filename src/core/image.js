@@ -157,18 +157,37 @@ export function isMostlyEmpty(img, minPixels = 30, threshold = 80) {
 
 // ---------- grid detection ----------
 
+/**
+ * A thin line pixel: more opaque than the pixels RIDGE px to either side across the line. Catches grid lines of
+ * any colour, including the half-transparent tinted lines AI background removal leaves behind.
+ * across = 'y' tests a horizontal line (compares above and below), 'x' a vertical one.
+ */
+const RIDGE = 3;
+function isRidge(data, W, H, x, y, across) {
+  const a = data[(y * W + x) * 4 + 3];
+  if (a < 40) return false;
+  if (across === 'y') {
+    if (y < RIDGE || y + RIDGE >= H) return false;
+    return a - data[((y - RIDGE) * W + x) * 4 + 3] >= 25 && a - data[((y + RIDGE) * W + x) * 4 + 3] >= 25;
+  }
+  if (x < RIDGE || x + RIDGE >= W) return false;
+  return a - data[(y * W + x - RIDGE) * 4 + 3] >= 25 && a - data[(y * W + x + RIDGE) * 4 + 3] >= 25;
+}
+
 function lineScoreProfile(img, axis, grayTol) {
   const { width: W, height: H, data } = img;
   const n = axis === 'x' ? W : H, m = axis === 'x' ? H : W;
-  const gray = new Float32Array(n), content = new Float32Array(n);
+  const gray = new Float32Array(n), ridge = new Float32Array(n), content = new Float32Array(n);
   for (let y = 0; y < H; y++) {
     for (let x = 0; x < W; x++) {
       const i = (y * W + x) * 4, a = data[i + 3];
       const k = axis === 'x' ? x : y;
       content[k] += a / 255;
       if (a > 60 && isGrayish(data[i], data[i + 1], data[i + 2], grayTol)) gray[k] += 1;
+      else if (a < 230 && isRidge(data, W, H, x, y, axis === 'x' ? 'x' : 'y')) ridge[k] += 1;
     }
   }
+  for (let k = 0; k < n; k++) gray[k] += ridge[k];
   for (let k = 0; k < n; k++) { gray[k] /= m; content[k] /= m; }
   // merge thick lines: a line 2-3px wide spreads its score across neighbours
   const merged = new Float32Array(n);
@@ -330,11 +349,19 @@ export function extractGlyphs(img, grid, opts = {}) {
   }
   const inZone = (p) => lineX[p % W] >= 0 || lineY[(p / W) | 0] >= 0;
 
-  // 1. erase grid lines: grey pixels and the faint fringe inside the line zone
-  if (clearLines) for (let p = 0; p < N; p++) {
-    if (!inZone(p)) continue;
-    const i = p * 4;
-    if (data[i + 3] <= 70 || isGrayish(data[i], data[i + 1], data[i + 2], grayTol)) data[i + 3] = 0;
+  // 1. erase grid lines: grey pixels, thin see-through lines of any colour and the faint fringe inside the line zone
+  if (clearLines) {
+    const thin = new Uint8Array(N);
+    for (let p = 0; p < N; p++) {
+      if (!inZone(p)) continue;
+      const x = p % W, y = (p / W) | 0;
+      if (data[p * 4 + 3] < 230 && ((lineY[y] >= 0 && isRidge(img.data, W, H, x, y, 'y')) || (lineX[x] >= 0 && isRidge(img.data, W, H, x, y, 'x')))) thin[p] = 1;
+    }
+    for (let p = 0; p < N; p++) {
+      if (!inZone(p)) continue;
+      const i = p * 4;
+      if (thin[p] || data[i + 3] <= 70 || isGrayish(data[i], data[i + 1], data[i + 2], grayTol)) data[i + 3] = 0;
+    }
   }
 
   // faint noise far from any solid artwork (invisible specks and trails) would join shapes and stretch bounds
@@ -439,7 +466,8 @@ export function extractGlyphs(img, grid, opts = {}) {
     const base = { index, row: r, col: c, x: cx, y: cy, w: grid.xs[c + 1] - cx, h: grid.ys[r + 1] - cy };
     let ids = byCell.get(index) || [];
     const largest = Math.max(0, ...ids.map((i) => area[i]));
-    ids = ids.filter((i) => area[i] >= largest * minRelative);
+    // tiny pieces and hairline dashes (leftovers of lines and halos) are not part of the glyph
+    ids = ids.filter((i) => area[i] >= largest * minRelative && (area[i] >= largest * 0.05 || Math.min(x1s[i] - x0s[i], y1s[i] - y0s[i]) >= 4));
     if (!ids.length || largest < 40) { cells.push({ ...base, image: null, offsetX: 0, offsetY: 0, empty: true }); continue; }
     const keep = new Set(ids);
     let gx0 = W, gy0 = H, gx1 = 0, gy1 = 0;
@@ -628,7 +656,18 @@ export function detectBackground(img) {
   let best = null;
   for (const b of buckets.values()) if (!best || b.n > best.n) best = b;
   if (!best || best.n < total * 0.45) return null;
-  return [Math.round(best.r / best.n), Math.round(best.g / best.n), Math.round(best.b / best.n)];
+  const color = [Math.round(best.r / best.n), Math.round(best.g / best.n), Math.round(best.b / best.n)];
+  // a frame line drawn on the image edge is not a background: the colour must also fill a ring further in
+  const d = Math.min(Math.floor(Math.min(W, H) / 8), Math.max(8, Math.round(Math.min(W, H) * 0.012)));
+  let inner = 0, match = 0;
+  const check = (x, y) => {
+    const i = (y * W + x) * 4;
+    inner++;
+    if (data[i + 3] >= 128 && Math.abs(data[i] - color[0]) + Math.abs(data[i + 1] - color[1]) + Math.abs(data[i + 2] - color[2]) <= 60) match++;
+  };
+  for (let x = d; x < W - d; x += 2) { check(x, d); check(x, H - 1 - d); }
+  for (let y = d; y < H - d; y += 2) { check(d, y); check(W - 1 - d, y); }
+  return match >= inner * 0.45 ? color : null;
 }
 
 /**

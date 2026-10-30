@@ -7,7 +7,7 @@ import { detectGrid, uniformGrid, extractGlyphs, guessGridCount, cleanupAlpha, t
 import { LAYOUTS, PROMPT_LAYOUTS, parseMapping, mappingToString } from '../../core/charsets.js';
 
 const ALL_LAYOUTS = [...PROMPT_LAYOUTS, ...LAYOUTS];
-import { createFont, setGlyph, autoMetrics, normalizeSizes, rankLayouts, suggestChars } from '../../core/font.js';
+import { createFont, setGlyph, autoMetrics, normalizeSizes, rankLayouts, suggestChars, sheetGlyphs } from '../../core/font.js';
 import { decodeImage } from '../../storage/files.js';
 import { saveFontRecord } from '../../storage/library.js';
 import { imageToCanvas } from '../../render/glyphs.js';
@@ -83,7 +83,7 @@ export async function openImporter(initialFiles) {
         const gx = guessGridCount(img, 'x'), gy = guessGridCount(img, 'y');
         const isSheet = big && ((gx && gx > 1) || (gy && gy > 1) || (img.width >= 800 && img.height >= 800));
         if (isSheet) {
-          const cols = gx && gx > 1 ? gx : 6, rows = gy && gy > 1 ? gy : cols;
+          const { rows, cols } = sheetShape(img, gx, gy);
           const it = { file, img, orig, bg, kind: 'sheet', rows, cols };
           items.push(it);
           await processSheet(it, true);
@@ -105,6 +105,32 @@ export async function openImporter(initialFiles) {
     importBtn.disabled = items.length === 0;
     if (items.length) active = Math.min(active, items.length - 1);
     renderAll();
+  }
+
+  /**
+   * Rows and columns of a sheet. Lines in one direction are sometimes too faint to count (AI background removal
+   * fades them); when the counted grid matches no known layout, the other direction completes it from a known
+   * layout, provided the rows or columns it adds fall on empty gaps.
+   */
+  function sheetShape(img, gx, gy) {
+    const shapes = [...new Set(ALL_LAYOUTS.map((L) => L.rows + 'x' + L.cols))].map((x) => x.split('x').map(Number));
+    const known = (r, c) => shapes.some(([R, C]) => R === r && C === c);
+    if (gx > 1 && gy > 1 && known(gy, gx)) return { rows: gy, cols: gx };
+    const gapsEmpty = (rows, cols) => {
+      const g = detectGrid(img, { rows, cols });
+      const empty = (axis, k) => {
+        const n = axis === 'x' ? img.height : img.width;
+        let a = 0;
+        for (let j = 0; j < n; j++) a += img.data[((axis === 'x' ? j * img.width + k : k * img.width + j) * 4) + 3];
+        return a / n / 255 < 0.03;
+      };
+      return g.sources.x.every((src, i) => src !== 'gap' || empty('x', g.xs[i])) && g.sources.y.every((src, i) => src !== 'gap' || empty('y', g.ys[i]));
+    };
+    const byCols = shapes.filter(([, C]) => C === gx), byRows = shapes.filter(([R]) => R === gy);
+    if (gx > 1 && byCols.length === 1 && gapsEmpty(byCols[0][0], gx)) return { rows: byCols[0][0], cols: gx };
+    if (gy > 1 && byRows.length === 1 && gapsEmpty(gy, byRows[0][1])) return { rows: gy, cols: byRows[0][1] };
+    const cols = gx > 1 ? gx : 6;
+    return { rows: gy > 1 ? gy : cols, cols };
   }
 
   function refFont() {
@@ -292,7 +318,7 @@ export async function openImporter(initialFiles) {
         h('p.hint', t('Drag the blue lines to fix the grid. Partial sheets work too: set the rows and columns you have.'))));
 
       const presetOpts = [{ value: '', label: t('Choose…') }, ...ALL_LAYOUTS.map((L) => ({ value: L.id, label: `${t(L.name)} (${L.chars.length})` })), ...SIMPLE_SETS.map((S) => ({ value: S.id, label: S.name }))];
-      const preset = select({ label: t('Character layout'), iconName: 'layout', value: '', options: presetOpts, onChange: (v) => {
+      const preset = select({ label: t('Character layout'), iconName: 'layout', value: it.layout?.id || '', options: presetOpts, onChange: (v) => {
         const L = ALL_LAYOUTS.find((x) => x.id === v) || SIMPLE_SETS.find((x) => x.id === v);
         if (!L) return;
         it.layout = L;
@@ -349,32 +375,14 @@ export async function openImporter(initialFiles) {
   }
 
   function doImport() {
-    const glyphs = [];
-    // the main H: from a sheet where H is an ordinary character (the capitals), else the font's own H
-    let mainH = null;
-    for (const it of items) {
-      if (it.kind !== 'sheet') continue;
-      const i = it.chars.indexOf('H');
-      if (i >= 0 && i !== refIndexOf(it) && it.cells[i].image) { mainH = it.cells[i].image.height; break; }
-    }
-    if (!mainH && target === 'existing') {
-      const fh = state.fonts.get(targetFontId)?.glyphs.get('H');
-      if (fh && fh.image) mainH = fh.image.height * fh.scale;
-    }
-    for (const it of items) {
-      if (it.kind === 'single') { if (it.single.image && it.single.char) glyphs.push({ char: it.single.char, image: it.single.image, cell: null, scale: 1 }); continue; }
-      // sheets with a reference H are scaled so that H matches the main H
-      const ri = refIndexOf(it);
-      const refImg = ri >= 0 ? it.cells[ri].image : null;
-      const sheetScale = mainH && refImg ? mainH / refImg.height : 1;
-      it.cells.forEach((c, i) => {
-        const ch = it.chars[i];
-        if (!ch || !c.image) return;
-        if (i === ri && mainH) return; // only a size reference
-        const cellH = it.grid.ys[c.row + 1] - it.grid.ys[c.row];
-        glyphs.push({ char: ch, image: c.image, scale: sheetScale, baselineFromTop: opts.baselineMode === 'cell' ? cellH * opts.baselinePos - c.offsetY : null });
-      });
-    }
+    const sheets = items.filter((it) => it.kind === 'sheet').map((it) => ({ chars: it.chars, cells: it.cells, ref: refIndexOf(it), it }));
+    const fh = target === 'existing' ? state.fonts.get(targetFontId)?.glyphs.get('H') : null;
+    const glyphs = sheetGlyphs(sheets, fh && fh.image ? fh.image.height * fh.scale : null).map((g) => {
+      const it = g.sheet.it, c = g.cell;
+      const cellH = it.grid.ys[c.row + 1] - it.grid.ys[c.row];
+      return { char: g.char, image: g.image, scale: g.scale, baselineFromTop: opts.baselineMode === 'cell' ? cellH * opts.baselinePos - c.offsetY : null };
+    });
+    for (const it of items) if (it.kind === 'single' && it.single.image && it.single.char) glyphs.push({ char: it.single.char, image: it.single.image, scale: 1 });
     if (!glyphs.length) { toast(t('Nothing to import: give at least one cell a character.'), 'error'); return; }
     let font;
     if (target === 'new' || !state.fonts.get(targetFontId)) {

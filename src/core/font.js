@@ -402,3 +402,30 @@ export function fontFromJSON(json, images) {
   }
   return font;
 }
+
+/**
+ * Glyphs from sliced sheets [{ chars, cells, ref }], where ref is the index of the sheet's size-reference H or -1.
+ * A sheet with a reference H is scaled so that H matches the capitals' H (an ordinary H on another sheet), or
+ * fallbackH when no sheet has one. The reference H itself is only a measure and is left out.
+ * Returns [{ char, image, scale, sheet, cell }].
+ */
+export function sheetGlyphs(sheets, fallbackH = null) {
+  let mainH = null;
+  for (const sh of sheets) {
+    const i = sh.chars.indexOf('H');
+    if (i >= 0 && i !== sh.ref && sh.cells[i]?.image) { mainH = sh.cells[i].image.height; break; }
+  }
+  if (!mainH) mainH = fallbackH;
+  const out = [];
+  for (const sh of sheets) {
+    const refImg = sh.ref >= 0 ? sh.cells[sh.ref]?.image : null;
+    const scale = mainH && refImg ? mainH / refImg.height : 1;
+    sh.cells.forEach((cell, i) => {
+      const ch = sh.chars[i];
+      if (!ch || !cell.image) return;
+      if (i === sh.ref && mainH) return;
+      out.push({ char: ch, image: cell.image, scale, sheet: sh, cell });
+    });
+  }
+  return out;
+}

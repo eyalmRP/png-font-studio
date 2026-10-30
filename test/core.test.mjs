@@ -170,3 +170,29 @@ test('flat green background is detected and removed without a green fringe', asy
   assert.ok(out.data[e + 3] > 60 && out.data[e + 3] < 200, 'edge semi-transparent');
   assert.ok(out.data[e + 1] < 160, 'green un-mixed from the edge');
 });
+
+test('a grid frame on the edge of a transparent sheet is not taken for a background', async () => {
+  const { createImage, detectBackground } = await import('../src/core/image.js');
+  const img = createImage(200, 200);
+  for (let y = 0; y < 200; y++) for (let x = 0; x < 200; x++) {
+    if (x < 2 || y < 2 || x > 197 || y > 197) img.data.set([150, 150, 150, 255], (y * 200 + x) * 4);
+  }
+  assert.equal(detectBackground(img), null);
+});
+
+test('half-transparent tinted grid lines are found and kept off the glyphs', async () => {
+  const { createImage, detectGrid, extractGlyphs } = await import('../src/core/image.js');
+  const W = 300, H = 150, img = createImage(W, H);
+  const put = (x, y, c) => img.data.set(c, (y * W + x) * 4);
+  // purple 2px lines at alpha 80 (what AI background removal leaves) on a 2×1 grid
+  for (let x = 0; x < W; x++) for (const y of [4, 5, 144, 145]) put(x, y, [140, 70, 185, 80]);
+  for (let y = 0; y < H; y++) for (const x of [4, 5, 149, 150, 294, 295]) put(x, y, [140, 70, 185, 80]);
+  // a glyph whose bottom sits on the bottom line, so the line touches it
+  for (let y = 60; y < 144; y++) for (let x = 40; x < 100; x++) put(x, y, [40, 160, 255, 255]);
+  const grid = detectGrid(img, { rows: 1, cols: 2 });
+  assert.deepEqual(grid.sources.x, ['line', 'line', 'line']);
+  assert.deepEqual(grid.sources.y, ['line', 'line']);
+  const cells = extractGlyphs(img, grid);
+  assert.equal(cells[0].image.width, 62, 'line fragments do not stretch the glyph');
+  assert.ok(cells[1].empty, 'nothing but line in the second cell');
+});

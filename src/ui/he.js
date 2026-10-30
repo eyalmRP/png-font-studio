@@ -590,4 +590,8 @@ export const HE = {
   'Zoom in': 'הגדלת התצוגה',
   'Zoom out': 'הקטנת התצוגה',
   'Zoom settle': 'זום והתייצבות',
+  'A save is already waiting for your confirmation': 'שמירה אחרת כבר ממתינה לאישור שלכם',
+  'claude.ai does not allow saving .{ext} files here': 'ב־claude.ai אי אפשר לשמור כאן קובצי ‎.{ext}',
+  'MOV files made in the page cannot be saved inside claude.ai. Use WebM or PNG sequence, or open the standalone app.': 'אי אפשר לשמור ב־claude.ai קובצי MOV שנוצרו בדף. השתמשו ב־WebM או ברצף PNG, או פתחו את האפליקציה העצמאית.',
+  'Saving failed': 'השמירה נכשלה',
 };

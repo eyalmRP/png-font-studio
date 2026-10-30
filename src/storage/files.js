@@ -1,4 +1,5 @@
 // File formats: font package (.font.zip), title project (.title.zip), PNG coding, and saving files.
+import { t } from '../ui/i18n.js';
 import { zipSync, unzip, textOf } from '../core/zip.js';
 import { fontToJSON, fontFromJSON } from '../core/font.js';
 import { createImage } from '../core/image.js';
@@ -135,13 +136,13 @@ export async function saveFile(filename, data) {
     try { await dl.save({ filename, data: blob }); return 'saved'; }
     catch (e) {
       if (e && e.code === 'declined') return 'declined';
-      if (e && e.code === 'rejected_extension') throw new Error(`claude.ai does not allow saving .${filename.split('.').pop()} files here`);
-      if (e && e.code === 'not_signed') throw new Error('MOV files made in the page cannot be saved inside claude.ai. Use WebM or PNG sequence, or open the standalone app.');
-      if (e && e.code === 'rate_limited') throw new Error('A save is already waiting for your confirmation');
-      if (e && (e.code === 'unavailable' || e.code === 'not_granted')) { /* fall back below */ } else throw new Error(e?.message || 'Saving failed');
+      if (e && e.code === 'rejected_extension') throw new Error(t('claude.ai does not allow saving .{ext} files here', { ext: filename.split('.').pop() }));
+      if (e && e.code === 'not_signed') throw new Error(t('MOV files made in the page cannot be saved inside claude.ai. Use WebM or PNG sequence, or open the standalone app.'));
+      if (e && e.code === 'rate_limited') throw new Error(t('A save is already waiting for your confirmation'));
+      if (e && (e.code === 'unavailable' || e.code === 'not_granted')) { /* fall back below */ } else throw new Error(e?.message || t('Saving failed'));
     }
   }
-  if (inArtifact()) throw new Error('Saving files is not available in this view');
+  if (inArtifact()) throw new Error(t('Saving files is not available in this view.'));
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url; a.download = filename; a.style.display = 'none';

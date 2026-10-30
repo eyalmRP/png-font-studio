@@ -1,0 +1,283 @@
+// Export dialog: still PNG, PNG sequence, WebM (alpha), MP4, GIF, APNG, animated WebP, MOV (standalone only).
+import { h, storeGet, storeSet } from './dom.js';
+import { t } from './i18n.js';
+import { modal, button, pills, toggle, toast, numberField } from './controls.js';
+import { state, selectedLayer } from '../app/store.js';
+import { renderFrame, contentBounds, renderLayer, layerMatrix, layerVisibleAt } from '../render/layer.js';
+import { canvasToBlob, saveFile, safeName, detectDownloads, inArtifact } from '../storage/files.js';
+import { zipSync } from '../core/zip.js';
+import { encodeAPNG } from '../encoders/apng.js';
+import { encodeAnimatedWebP } from '../encoders/webp.js';
+import { encodeMOV } from '../encoders/mov.js';
+import { GIFEncoder, quantize, applyPalette } from 'gifenc';
+import { muxWebM, bleedColors, alphaI420 } from '../encoders/webm.js';
+import { Muxer as MP4Muxer, ArrayBufferTarget as MP4Target } from 'mp4-muxer';
+
+const FORMATS = [
+  { id: 'png', label: 'PNG image', desc: 'The current frame with transparency.', still: true },
+  { id: 'pngseq', label: 'PNG sequence', desc: 'Every frame as PNG in a ZIP. Imports into After Effects, Premiere, DaVinci, Final Cut.' },
+  { id: 'webm', label: 'WebM video', desc: 'VP9 with alpha. Plays in Chrome, OBS and web pages.' },
+  { id: 'mov', label: 'MOV video', desc: 'QuickTime Animation codec with alpha (lossless).', standaloneOnly: true },
+  { id: 'mp4', label: 'MP4 video', desc: 'H.264 on the background colour (MP4 has no alpha).' },
+  { id: 'gif', label: 'GIF', desc: 'For chat stickers. Edges are hard (1-bit transparency).' },
+  { id: 'apng', label: 'Animated PNG', desc: 'Soft transparency, plays in all browsers.' },
+  { id: 'webp', label: 'Animated WebP', desc: 'Small files with soft transparency.' },
+];
+
+export async function openExport() {
+  const opts = storeGet('export', { format: 'png', scale: 1, trim: false, background: false, onlySelected: false, loop: true, quality: 'high' });
+  const dl = await detectDownloads();
+  const standalone = !inArtifact();
+  const cards = h('div.export-grid');
+  const optsEl = h('div', { style: { display: 'flex', flexDirection: 'column', gap: '12px' } });
+  const status = h('p.hint');
+  const bar = h('div.progress', h('div'));
+  bar.hidden = true;
+  let cancelled = false, busy = false;
+
+  const render = () => {
+    cards.replaceChildren(...FORMATS.map((f) => {
+      const disabled = f.standaloneOnly && !standalone;
+      return h('button.export-card', {
+        type: 'button', class: opts.format === f.id ? 'on' : '', disabled,
+        title: disabled ? t('claude.ai only lets a page save MOV files it made itself through its own film export. Open the standalone app (index.html from the repository) to export MOV.') : '',
+        on: { click: () => { opts.format = f.id; render(); } },
+      }, h('b', t(f.label)), h('span', disabled ? t('Available in the standalone app') : t(f.desc)));
+    }));
+    const fmt = FORMATS.find((f) => f.id === opts.format);
+    const ab = state.project.artboard;
+    optsEl.replaceChildren(
+      h('div.field', h('span', t('Size')), pills({ value: opts.scale, options: [0.25, 0.5, 1, 2, 4].map((s) => ({ value: s, label: `${s}× · ${Math.round(ab.w * s)}×${Math.round(ab.h * s)}` })), onChange: (v) => { opts.scale = v; render(); } })),
+      toggle({ label: t('Trim to the title (crop away empty space)'), iconName: 'crop', value: opts.trim, onChange: (v) => { opts.trim = v; } }),
+      toggle({ label: t('Include background colour'), iconName: 'palette', value: opts.background || opts.format === 'mp4', onChange: (v) => { opts.background = v; } }),
+      toggle({ label: t('Only the selected layer'), iconName: 'layers', value: opts.onlySelected, onChange: (v) => { opts.onlySelected = v; } }),
+      fmt.still ? null : h('p.hint', t('{n} frames at {fps} fps ({s} s). Change the length and frame rate in the timeline.', { n: Math.max(1, Math.round(state.project.duration * state.project.fps)), fps: state.project.fps, s: state.project.duration })),
+      ['gif', 'apng', 'webp'].includes(opts.format) ? toggle({ label: t('Loop forever'), iconName: 'repeat', value: opts.loop, onChange: (v) => { opts.loop = v; } }) : null,
+      opts.format === 'mp4' && ab.bg !== 'color' ? h('p.hint', t('MP4 cannot store transparency, so the artboard background colour is used.')) : null,
+    );
+  };
+  render();
+  const go = button({ label: t('Export'), icon: 'download', kind: 'primary', onClick: () => run() });
+  const m = modal({
+    title: t('Export'), iconName: 'download', class: 'modal-md',
+    body: [cards, optsEl, bar, status, !dl && inArtifact() ? h('p.hint', t('Saving files is not available in this view.')) : null],
+    actions: [button({ label: t('Close'), onClick: () => { cancelled = true; m.close(); } }), go],
+    onClose: () => { cancelled = true; },
+  });
+
+  async function run() {
+    if (busy) return;
+    busy = true; cancelled = false; go.disabled = true; bar.hidden = false;
+    storeSet('export', opts);
+    const setP = (f, msg) => { bar.firstChild.style.width = Math.round(f * 100) + '%'; if (msg) status.textContent = msg; };
+    try {
+      const res = await exportAs(opts, setP, () => cancelled);
+      if (!res) { status.textContent = t('Export cancelled'); return; }
+      setP(1, t('Saving {name}…', { name: res.name }));
+      const r = await saveFile(res.name, res.blob);
+      if (r === 'saved') { toast(t('Exported {name}', { name: res.name }), 'ok'); status.textContent = t('Saved {name} ({size})', { name: res.name, size: sizeLabel(res.blob.size) }); }
+      else status.textContent = t('Save was cancelled');
+    } catch (e) {
+      console.error(e);
+      status.textContent = e.message || String(e);
+      toast(e.message || t('Export failed'), 'error', 6000);
+    } finally { busy = false; go.disabled = false; }
+  }
+}
+
+const sizeLabel = (n) => (n > 1048576 ? (n / 1048576).toFixed(1) + ' MB' : Math.round(n / 1024) + ' KB');
+
+function cropFor(opts, project, times) {
+  if (!opts.trim) return null;
+  let box = null;
+  const only = opts.onlySelected ? selectedLayer() : null;
+  for (const tm of times) {
+    let b;
+    if (only) {
+      if (!layerVisibleAt(only, tm)) continue;
+      const r = renderLayer(only, tm, 0.25);
+      if (!r) continue;
+      const M = layerMatrix(only);
+      const pts = [[r.rect.x, r.rect.y], [r.rect.x + r.rect.w, r.rect.y], [r.rect.x, r.rect.y + r.rect.h], [r.rect.x + r.rect.w, r.rect.y + r.rect.h]].map(([x, y]) => M.transformPoint(new DOMPoint(x, y)));
+      const xs = pts.map((p) => p.x), ys = pts.map((p) => p.y);
+      b = { x: Math.min(...xs), y: Math.min(...ys), w: Math.max(...xs) - Math.min(...xs), h: Math.max(...ys) - Math.min(...ys) };
+    } else b = contentBounds(project, tm);
+    if (!b) continue;
+    if (!box) box = { ...b };
+    else { const x1 = Math.max(box.x + box.w, b.x + b.w), y1 = Math.max(box.y + box.h, b.y + b.h); box.x = Math.min(box.x, b.x); box.y = Math.min(box.y, b.y); box.w = x1 - box.x; box.h = y1 - box.y; }
+  }
+  if (!box) return null;
+  const pad = 4;
+  return { x: Math.floor(box.x - pad), y: Math.floor(box.y - pad), w: Math.ceil(box.w + pad * 2), h: Math.ceil(box.h + pad * 2) };
+}
+
+/** Render frames and encode. Returns { name, blob } or null if cancelled. */
+export async function exportAs(opts, progress = () => {}, isCancelled = () => false) {
+  const project = state.project;
+  const base = safeName(project.name === 'Untitled title' && project.layers[0] ? project.layers[0].name : project.name, 'title');
+  const view = opts.onlySelected && selectedLayer() ? { ...project, layers: [selectedLayer()] } : project;
+  const bg = opts.background || opts.format === 'mp4';
+  const yieldUI = () => new Promise((r) => setTimeout(r, 0));
+  if (opts.format === 'png') {
+    const crop = cropFor(opts, view, [state.time]);
+    const c = renderFrame(view, state.time, opts.scale, { background: bg, crop });
+    return { name: `${base}.png`, blob: await canvasToBlob(c) };
+  }
+  const fps = project.fps;
+  const n = Math.max(1, Math.round(project.duration * fps));
+  const times = Array.from({ length: n }, (_, i) => i / fps);
+  progress(0, t('Measuring…'));
+  const crop = cropFor(opts, view, times.filter((_, i) => i % 2 === 0 || i === n - 1));
+  const even = ['webm', 'mp4'].includes(opts.format);
+  const frameAt = (i) => {
+    let c = renderFrame(view, times[i], opts.scale, { background: bg, crop });
+    if (even && (c.width % 2 || c.height % 2)) {
+      const e = document.createElement('canvas');
+      e.width = c.width + (c.width % 2); e.height = c.height + (c.height % 2);
+      e.getContext('2d').drawImage(c, 0, 0);
+      c = e;
+    }
+    return c;
+  };
+  const loops = opts.loop ? 0 : 1;
+  switch (opts.format) {
+    case 'pngseq': {
+      const entries = [];
+      for (let i = 0; i < n; i++) {
+        if (isCancelled()) return null;
+        const blob = await canvasToBlob(frameAt(i));
+        entries.push({ name: `${base}/${base}_${String(i).padStart(5, '0')}.png`, data: new Uint8Array(await blob.arrayBuffer()) });
+        progress((i + 1) / n, t('Frame {i} of {n}', { i: i + 1, n }));
+      }
+      return { name: `${base}_png_sequence.zip`, blob: new Blob([zipSync(entries)], { type: 'application/zip' }) };
+    }
+    case 'apng': case 'webp': {
+      const frames = [];
+      let w = 0, hh = 0;
+      for (let i = 0; i < n; i++) {
+        if (isCancelled()) return null;
+        const c = frameAt(i); w = c.width; hh = c.height;
+        const blob = opts.format === 'apng' ? await canvasToBlob(c) : await canvasToBlob(c, 'image/webp', 0.92);
+        if (opts.format === 'webp' && blob.type !== 'image/webp') throw new Error(t('This browser cannot make WebP images. Try Chrome or Edge, or export APNG.'));
+        frames.push(new Uint8Array(await blob.arrayBuffer()));
+        progress((i + 1) / n, t('Frame {i} of {n}', { i: i + 1, n }));
+        if (i % 4 === 0) await yieldUI();
+      }
+      const bytes = opts.format === 'apng' ? encodeAPNG(frames, w, hh, fps, loops) : encodeAnimatedWebP(frames, w, hh, fps, loops);
+      return { name: `${base}.${opts.format === 'apng' ? 'png' : 'webp'}`, blob: new Blob([bytes], { type: opts.format === 'apng' ? 'image/png' : 'image/webp' }) };
+    }
+    case 'gif': {
+      const gif = GIFEncoder();
+      for (let i = 0; i < n; i++) {
+        if (isCancelled()) return null;
+        const c = frameAt(i);
+        const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
+        const palette = quantize(d, 256, { format: 'rgba4444', oneBitAlpha: 100, clearAlpha: true, clearAlphaThreshold: 100 });
+        const index = applyPalette(d, palette, 'rgba4444');
+        let ti = palette.findIndex((p) => p[3] === 0);
+        const o = { palette, delay: Math.round(1000 / fps), dispose: 2 };
+        if (i === 0) o.repeat = opts.loop ? 0 : -1;
+        if (ti >= 0) { o.transparent = true; o.transparentIndex = ti; }
+        gif.writeFrame(index, c.width, c.height, o);
+        progress((i + 1) / n, t('Frame {i} of {n}', { i: i + 1, n }));
+        if (i % 3 === 0) await yieldUI();
+      }
+      gif.finish();
+      return { name: `${base}.gif`, blob: new Blob([gif.bytes()], { type: 'image/gif' }) };
+    }
+    case 'mov': {
+      const frames = [];
+      let w = 0, hh = 0;
+      for (let i = 0; i < n; i++) {
+        if (isCancelled()) return null;
+        const c = frameAt(i); w = c.width; hh = c.height;
+        frames.push(c.getContext('2d').getImageData(0, 0, w, hh).data);
+        progress((i + 1) / n * 0.8, t('Frame {i} of {n}', { i: i + 1, n }));
+        if (i % 4 === 0) await yieldUI();
+      }
+      progress(0.9, t('Encoding MOV…'));
+      await yieldUI();
+      return { name: `${base}.mov`, blob: new Blob([encodeMOV(frames, w, hh, fps)], { type: 'video/quicktime' }) };
+    }
+    case 'webm': return encodeWebMAlpha(base, n, fps, frameAt, progress, isCancelled);
+    case 'mp4': return encodeVideo('mp4', base, n, fps, frameAt, progress, isCancelled);
+    default: throw new Error('Unknown format');
+  }
+}
+
+/** VP9 colour + VP9 alpha streams muxed into one WebM (alpha in BlockAdditional, as libvpx does). */
+async function encodeWebMAlpha(base, n, fps, frameAt, progress, isCancelled) {
+  if (typeof VideoEncoder === 'undefined') throw new Error(t('This browser cannot encode video. Use Chrome or Edge, or export a PNG sequence.'));
+  const first = frameAt(0);
+  const w = first.width, hh = first.height;
+  const bitrate = Math.min(40e6, Math.max(3e6, w * hh * fps * 0.12));
+  const config = { codec: 'vp09.00.10.08', width: w, height: hh, bitrate, framerate: fps, latencyMode: 'quality' };
+  const sup = await VideoEncoder.isConfigSupported(config).catch(() => ({ supported: false }));
+  if (!sup.supported) throw new Error(t('This browser cannot encode WebM. Use Chrome or Edge, or export a PNG sequence.'));
+  const color = [], alpha = [];
+  let err = null;
+  const grab = (list) => (chunk) => { const b = new Uint8Array(chunk.byteLength); chunk.copyTo(b); list.push({ data: b, key: chunk.type === 'key', time: Math.round(chunk.timestamp / 1000) }); };
+  const encC = new VideoEncoder({ output: grab(color), error: (e) => { err = e; } });
+  const encA = new VideoEncoder({ output: grab(alpha), error: (e) => { err = e; } });
+  encC.configure(config);
+  encA.configure({ ...config, bitrate: bitrate * 0.5 });
+  for (let i = 0; i < n; i++) {
+    if (isCancelled()) { encC.close(); encA.close(); return null; }
+    if (err) throw err;
+    const c = i === 0 ? first : frameAt(i);
+    const px = c.getContext('2d').getImageData(0, 0, w, hh).data;
+    const ts = Math.round((i * 1e6) / fps), dur = Math.round(1e6 / fps);
+    const a = alphaI420(px, w, hh);
+    bleedColors(px, w, hh, 2);
+    const fc = new VideoFrame(px, { format: 'RGBX', codedWidth: w, codedHeight: hh, timestamp: ts, duration: dur });
+    const fa = new VideoFrame(a, { format: 'I420', codedWidth: w, codedHeight: hh, timestamp: ts, duration: dur });
+    const key = i % (fps * 2) === 0;
+    encC.encode(fc, { keyFrame: key }); encA.encode(fa, { keyFrame: key });
+    fc.close(); fa.close();
+    progress((i + 1) / n * 0.95, t('Frame {i} of {n}', { i: i + 1, n }));
+    if (encC.encodeQueueSize > 6) await new Promise((r) => setTimeout(r, 10)); else if (i % 3 === 0) await new Promise((r) => setTimeout(r, 0));
+  }
+  await encC.flush(); await encA.flush();
+  encC.close(); encA.close();
+  if (err) throw err;
+  const frames = color.map((f, i) => ({ ...f, alpha: alpha[i] ? alpha[i].data : null }));
+  const bytes = muxWebM({ width: w, height: hh, frames, durationMs: (n * 1000) / fps, fps });
+  return { name: `${base}.webm`, blob: new Blob([bytes], { type: 'video/webm' }) };
+}
+
+async function encodeVideo(kind, base, n, fps, frameAt, progress, isCancelled) {
+  if (typeof VideoEncoder === 'undefined') throw new Error(t('This browser cannot encode video. Use Chrome or Edge, or export a PNG sequence.'));
+  const first = frameAt(0);
+  const w = first.width, hh = first.height;
+  const webm = kind === 'webm';
+  const pxRate = w * hh * fps;
+  const config = webm
+    ? { codec: 'vp09.00.31.08', width: w, height: hh, bitrate: Math.min(40e6, Math.max(4e6, pxRate * 0.12)), framerate: fps, alpha: 'keep', latencyMode: 'quality' }
+    : { codec: hh > 1080 || w > 1920 ? 'avc1.640033' : 'avc1.640028', width: w, height: hh, bitrate: Math.min(40e6, Math.max(4e6, pxRate * 0.1)), framerate: fps };
+  const sup = await VideoEncoder.isConfigSupported(config).catch(() => ({ supported: false }));
+  if (!sup.supported) {
+    if (webm) throw new Error(t('This browser cannot encode WebM with transparency. Use Chrome or Edge, or export a PNG sequence.'));
+    throw new Error(t('This browser cannot encode MP4 at this size. Try a smaller size or another browser.'));
+  }
+  const target = new MP4Target();
+  const muxer = new MP4Muxer({ target, video: { codec: 'avc', width: w, height: hh }, fastStart: 'in-memory' });
+  let err = null;
+  const enc = new VideoEncoder({ output: (chunk, meta) => muxer.addVideoChunk(chunk, meta), error: (e) => { err = e; } });
+  enc.configure(config);
+  for (let i = 0; i < n; i++) {
+    if (isCancelled()) { enc.close(); return null; }
+    if (err) throw err;
+    const c = i === 0 ? first : frameAt(i);
+    const vf = new VideoFrame(c, { timestamp: Math.round((i * 1e6) / fps), duration: Math.round(1e6 / fps), alpha: webm ? 'keep' : 'discard' });
+    enc.encode(vf, { keyFrame: i % (fps * 2) === 0 });
+    vf.close();
+    progress((i + 1) / n * 0.95, t('Frame {i} of {n}', { i: i + 1, n }));
+    if (enc.encodeQueueSize > 8) await new Promise((r) => setTimeout(r, 10));
+    else if (i % 3 === 0) await new Promise((r) => setTimeout(r, 0));
+  }
+  await enc.flush();
+  enc.close();
+  if (err) throw err;
+  muxer.finalize();
+  return { name: `${base}.${kind}`, blob: new Blob([target.buffer], { type: webm ? 'video/webm' : 'video/mp4' }) };
+}

@@ -23,6 +23,7 @@ async function build() {
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;600&display=swap">
 <style>${css}</style>`;
   const bodyStart = '<div id="app"></div>';
+  fs.rmSync(path.join(dist, 'artifact/fonts'), { recursive: true, force: true });
   fs.mkdirSync(path.join(dist, 'artifact/fonts'), { recursive: true });
   for (const f of ['bubble-blue.zip']) fs.copyFileSync(path.join(root, 'assets/fonts', f), path.join(dist, 'artifact/fonts', f));
   fs.writeFileSync(path.join(dist, 'artifact/index.html'), `${head}\n${bodyStart}\n<script>${js}</script>\n`);

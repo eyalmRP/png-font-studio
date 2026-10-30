@@ -1,6 +1,6 @@
 // Titles mode: layers + artboard (left), stage + animation player (centre), inspector (right).
 import { h, clear, icon } from '../dom.js';
-import { t } from '../i18n.js';
+import { t, ltr } from '../i18n.js';
 import { section, iconButton, button, numberField, pills, colorField, select, menu } from '../controls.js';
 import { state, on, emit, selectLayer, checkpoint, projectChanged, newTextLayer, selectedLayer } from '../../app/store.js';
 import { createStage } from './stage.js';
@@ -38,7 +38,7 @@ export function mountTitles({ left, right, center, exportSlot, sizes, applySizes
   const ab = state.project.artboard;
   const sizeSel = select({
     label: t('Size'), iconName: 'crop', value: `${ab.w}x${ab.h}`,
-    options: [...SIZES.map((s) => ({ value: s.id, label: `${t(s.label)} · ${s.w}×${s.h}` })), { value: 'custom', label: t('Custom') }],
+    options: [...SIZES.map((s) => ({ value: s.id, label: `${t(s.label)} · ${ltr(`${s.w}×${s.h}`)}` })), { value: 'custom', label: t('Custom') }],
     onChange: (v) => { const s = SIZES.find((x) => x.id === v); if (s) setArtboard(s.w, s.h); },
   });
   const wF = numberField({ label: 'W', min: 16, max: 8192, unit: 'px', value: ab.w, onChange: (v) => setArtboard(v, state.project.artboard.h), onInput: () => {} });

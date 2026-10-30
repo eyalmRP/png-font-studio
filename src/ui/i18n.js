@@ -24,3 +24,6 @@ export function t(s, vars) {
   if (vars) out = out.replace(/\{(\w+)\}/g, (_, k) => (vars[k] ?? ''));
   return out;
 }
+
+/** Keep a left-to-right fragment such as 1920×1080 in order inside right-to-left text (Unicode isolate). */
+export const ltr = (s) => `\u2066${s}\u2069`;

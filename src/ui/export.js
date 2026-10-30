@@ -1,6 +1,6 @@
 // Export dialog: still PNG, PNG sequence, WebM (alpha), MP4, GIF, APNG, animated WebP, MOV (standalone only).
 import { h, storeGet, storeSet } from './dom.js';
-import { t } from './i18n.js';
+import { t, ltr } from './i18n.js';
 import { modal, button, pills, toggle, toast, numberField } from './controls.js';
 import { state, selectedLayer } from '../app/store.js';
 import { renderFrame, contentBounds, renderLayer, layerMatrix, layerVisibleAt } from '../render/layer.js';
@@ -48,7 +48,7 @@ export async function openExport() {
     const fmt = FORMATS.find((f) => f.id === opts.format);
     const ab = state.project.artboard;
     optsEl.replaceChildren(...[
-      h('div.field', h('span', t('Size')), pills({ value: opts.scale, options: [0.25, 0.5, 1, 2, 4].map((s) => ({ value: s, label: `${s}× · ${Math.round(ab.w * s)}×${Math.round(ab.h * s)}` })), onChange: (v) => { opts.scale = v; render(); } })),
+      h('div.field', h('span', t('Size')), pills({ value: opts.scale, options: [0.25, 0.5, 1, 2, 4].map((s) => ({ value: s, label: ltr(`${s}× · ${Math.round(ab.w * s)}×${Math.round(ab.h * s)}`) })), onChange: (v) => { opts.scale = v; render(); } })),
       toggle({ label: t('Trim to the title (crop away empty space)'), iconName: 'crop', value: opts.trim, onChange: (v) => { opts.trim = v; } }),
       toggle({ label: t('Include background colour'), iconName: 'palette', value: opts.background || opts.format === 'mp4', onChange: (v) => { opts.background = v; } }),
       toggle({ label: t('Only the selected layer'), iconName: 'layers', value: opts.onlySelected, onChange: (v) => { opts.onlySelected = v; } }),

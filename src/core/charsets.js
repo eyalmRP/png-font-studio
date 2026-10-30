@@ -71,7 +71,7 @@ export function charCategory(ch) {
 }
 
 export const CAP_REF = [...'HEITLFNMZXKA'];
-export const X_REF = [...'xzvwunmosceaR'.toLowerCase()];
+export const X_REF = [...'xzvwunmr']; // mostly flat-topped; round letters overshoot
 export const ASC_REF = [...'bdfhkl'];
 export const DESC_REF = [...'gpqy'];
 
@@ -94,3 +94,17 @@ export const SIZE_GROUPS = [
   { id: 'hebrew', chars: [...'אבגדהוזחטכמנסעפצרשתם'] },
   { id: 'hebrewDesc', chars: [...'קךןףץ'] },
 ];
+
+// Optical overshoot: round shapes extend past the flat guide lines so they look the same size.
+// both = above the top line and below the baseline · top = above only · bottom = below only.
+const ROUND = new Map();
+const round = (side, chars) => { for (const c of chars) ROUND.set(c, side); };
+round('both', 'CGOQS' + 'oces' + 'a' + '03689' + '@©®' + 'סםעט');
+round('top', 'nmhr2' + 'gpq' + 'f');
+round('bottom', 'JUu5bdt' + 'ו');
+
+/** Which sides of a character overshoot: 'both' | 'top' | 'bottom' | null. glyph.round overrides when set. */
+export function roundSides(ch, override) {
+  if (override !== undefined && override !== null && override !== 'auto') return override === 'none' ? null : override;
+  return ROUND.get(ch) || null;
+}

@@ -1,0 +1,23 @@
+{
+  "name": "png-font-studio",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "PNG font creator and animated title editor",
+  "scripts": {
+    "fonts": "node scripts/make-builtin-fonts.mjs",
+    "build": "node scripts/build.mjs",
+    "test": "node --test test/*.test.mjs",
+    "dev": "node scripts/build.mjs --watch"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.0",
+    "pngjs": "^7.0.0"
+  },
+  "dependencies": {
+    "gifenc": "^1.0.3",
+    "lucide": "^0.460.0",
+    "mp4-muxer": "^5.2.1",
+    "webm-muxer": "^5.1.4"
+  }
+}

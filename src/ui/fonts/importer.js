@@ -3,7 +3,7 @@ import { h, clear, icon, pickFiles, storeGet, storeSet, rafThrottle } from '../d
 import { t } from '../i18n.js';
 import { modal, button, numberField, pills, toggle, select, toast, section } from '../controls.js';
 import { state, addFont, emit, checkpoint, fontChanged } from '../../app/store.js';
-import { detectGrid, uniformGrid, sliceCells, processCell, guessGridCount, cleanupAlpha, trimImage } from '../../core/image.js';
+import { detectGrid, uniformGrid, extractGlyphs, guessGridCount, cleanupAlpha, trimImage } from '../../core/image.js';
 import { LAYOUTS, parseMapping, mappingToString } from '../../core/charsets.js';
 import { createFont, setGlyph, autoMetrics, normalizeSizes, rankLayouts, suggestChars } from '../../core/font.js';
 import { decodeImage } from '../../storage/files.js';
@@ -40,7 +40,7 @@ export async function openImporter(initialFiles) {
   const items = []; // { file, img, kind, grid, cells, chars, single:{image,char}, recog }
   let active = 0;
   const opts = storeGet('importOpts', { inset: 3, low: 24, high: 160, minArea: 24, clearLines: true, baselineMode: 'auto', baselinePos: 0.82, evenSizes: true, replace: true });
-  let target = state.fonts.size ? 'existing' : 'new';
+  let target = 'new';
   let targetFontId = state.currentFontId;
   let newName = t('My font');
 
@@ -89,6 +89,11 @@ export async function openImporter(initialFiles) {
         }
       } catch (e) { toast(`${file.name}: ${e.message}`, 'error', 5000); }
     }
+    if (newName === t('My font') && items[0]) {
+      // name the new font after the first file ("orange-sheet-1.png" → "Orange")
+      const stem = items[0].file.name.replace(/\.[^.]+$/, '').replace(/[-_ ]*(sheet)?[-_ ]*\d*$/i, '').replace(/[-_]+/g, ' ').trim();
+      if (stem) newName = stem.replace(/\b\w/g, (c) => c.toUpperCase());
+    }
     status.textContent = '';
     drop.hidden = items.length > 0;
     layoutEl.hidden = items.length === 0;
@@ -105,8 +110,8 @@ export async function openImporter(initialFiles) {
 
   async function processSheet(it, recognise) {
     it.grid = it.gridManual || detectGrid(it.img, { rows: it.rows, cols: it.cols });
-    const raw = sliceCells(it.img, it.grid, opts.inset);
-    it.cells = raw.map((c) => ({ ...c, ...processCell(c.image, { clearLines: opts.clearLines, cleanupOpts: { low: opts.low, high: opts.high, minArea: opts.minArea } }) }));
+    // shapes are assigned to cells by their centre, so glyphs crossing a grid line stay whole
+    it.cells = extractGlyphs(it.img, it.grid, { clearLines: opts.clearLines, low: opts.low, high: opts.high, minArea: opts.minArea, streaks: opts.streaks !== false });
     if (recognise || !it.chars || it.chars.length !== it.cells.length) {
       it.chars = it.cells.map(() => null);
       const n = it.cells.length;
@@ -236,7 +241,7 @@ export async function openImporter(initialFiles) {
       cellsEl.appendChild(h('p.hint', { style: { gridColumn: 'span 4', alignSelf: 'center' } }, t('Type the character this image draws.')));
       return;
     }
-    cellsEl.style.gridTemplateColumns = `repeat(${Math.min(it.grid.cols, 12)}, 1fr)`;
+    cellsEl.style.gridTemplateColumns = `repeat(${Math.min(it.grid.cols, 12)}, minmax(0, 84px))`;
     const ref = refFont();
     it.cells.forEach((cell, i) => {
       const c = h('canvas');
@@ -299,7 +304,7 @@ export async function openImporter(initialFiles) {
     const nf = (key, label, o) => numberField({ label, value: opts[key], ...o, onChange: async (v) => { opts[key] = v; storeSet('importOpts', opts); for (const x of items) if (x.kind === 'sheet') await processSheet(x, false); renderAll(); }, onInput: () => {} });
     side.appendChild(section({ id: 'imp-clean', title: t('Clean-up'), iconName: 'eraser', open: false },
       toggle({ label: t('Remove grid lines'), value: opts.clearLines, onChange: async (v) => { opts.clearLines = v; storeSet('importOpts', opts); for (const x of items) if (x.kind === 'sheet') await processSheet(x, false); renderAll(); } }),
-      nf('inset', t('Cell inset'), { min: 0, max: 40, unit: 'px' }),
+      toggle({ label: t('Remove thin streaks'), value: opts.streaks !== false, onChange: async (v) => { opts.streaks = v; storeSet('importOpts', opts); for (const x of items) if (x.kind === 'sheet') await processSheet(x, false); renderAll(); } }),
       nf('low', t('Edge threshold'), { min: 0, max: 200, slider: true, title: t('Pixels fainter than this are removed unless they touch the glyph') }),
       nf('high', t('Solid threshold'), { min: 1, max: 255, slider: true }),
       nf('minArea', t('Smallest speck kept'), { min: 0, max: 2000, unit: 'px' })));
@@ -326,7 +331,7 @@ export async function openImporter(initialFiles) {
       it.cells.forEach((c, i) => {
         const ch = it.chars[i];
         if (!ch || !c.image) return;
-        const cellH = it.grid.ys[c.row + 1] - it.grid.ys[c.row] - opts.inset * 2;
+        const cellH = it.grid.ys[c.row + 1] - it.grid.ys[c.row];
         glyphs.push({ char: ch, image: c.image, baselineFromTop: opts.baselineMode === 'cell' ? cellH * opts.baselinePos - c.offsetY : null });
       });
     }

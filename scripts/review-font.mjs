@@ -26,12 +26,12 @@ function sample(img, fx, fy) { // bilinear, premultiplied-ish
   return out;
 }
 function drawGlyph(dst, g, x, base) {
-  const s = g.scale * K, w = Math.round(g.image.width * s), h = Math.round(g.image.height * s);
+  const s = g.scale * K, sxk = s * (g.sx || 1), w = Math.round(g.image.width * sxk), h = Math.round(g.image.height * s);
   const top = base - g.baseline * g.scale * K;
   for (let yy = 0; yy < h; yy++) for (let xx = 0; xx < w; xx++) {
     const X = Math.round(x + xx), Y = Math.round(top + yy);
     if (X < 0 || Y < 0 || X >= dst.width || Y >= dst.height) continue;
-    const [r, gg, b, a] = sample(g.image, xx / s, yy / s);
+    const [r, gg, b, a] = sample(g.image, xx / sxk, yy / s);
     if (a <= 0) continue;
     const i = (Y * dst.width + X) * 4;
     dst.data[i] = r + dst.data[i] * (1 - a); dst.data[i + 1] = gg + dst.data[i + 1] * (1 - a); dst.data[i + 2] = b + dst.data[i + 2] * (1 - a);

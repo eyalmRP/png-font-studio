@@ -1,6 +1,6 @@
 // Paragraph layout for PNG fonts: case transforms, ligatures, kerning, tracking, line breaking,
 // bidi reordering, alignment and justification. Produces positioned items plus caret/hit-test helpers.
-import { glyphAdvance, opticalKern, metricKern, unitsPerEm } from './font.js';
+import { glyphAdvance, opticalKern, metricKern, unitsPerEm, glyphWidth } from './font.js';
 import { resolveLevels, visualOrder, firstStrong, mirrorChar } from './bidi.js';
 import { paraRanges } from './textdoc.js';
 
@@ -435,7 +435,7 @@ export function inkBounds(layout) {
     let gx0, gy0, gx1, gy1;
     if (it.glyph) {
       const g = it.glyph;
-      gx0 = it.x + g.lsb * it.kx; gx1 = gx0 + g.image.width * g.scale * it.kx;
+      gx0 = it.x + g.lsb * it.kx; gx1 = gx0 + glyphWidth(g) * it.kx;
       gy0 = it.baseline - g.baseline * g.scale * it.kv; gy1 = gy0 + g.image.height * g.scale * it.kv;
     } else { gx0 = it.x; gx1 = it.x + it.adv; gy0 = it.baseline - it.ascent; gy1 = it.baseline + it.descent; }
     if (gx0 < x0) x0 = gx0; if (gy0 < y0) y0 = gy0; if (gx1 > x1) x1 = gx1; if (gy1 > y1) y1 = gy1;

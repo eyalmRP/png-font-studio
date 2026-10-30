@@ -3,12 +3,13 @@ import { glyphCanvas, canvasFilterSupported } from './glyphs.js';
 import { unitIndex } from '../core/anim.js';
 import { isPathWarp, pathPlacer } from '../core/warp.js';
 import { hexToRgb } from '../ui/controls.js';
+import { glyphWidth } from '../core/font.js';
 
 export function glyphRect(it) {
   if (it.glyph) {
     const g = it.glyph;
     const x = it.x + g.lsb * it.kx, y = it.baseline - g.baseline * g.scale * it.kv;
-    return { x, y, w: g.image.width * g.scale * it.kx, h: g.image.height * g.scale * it.kv };
+    return { x, y, w: glyphWidth(g) * it.kx, h: g.image.height * g.scale * it.kv };
   }
   return { x: it.x, y: it.baseline - it.ascent, w: it.adv, h: it.ascent + it.descent };
 }

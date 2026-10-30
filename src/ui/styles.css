@@ -286,7 +286,8 @@ button { cursor: pointer; }
 .imp-cells { display: grid; grid-template-columns: repeat(6, 1fr); gap: 4px; }
 .imp-cell { display: flex; flex-direction: column; align-items: center; background: var(--field); border-radius: 6px; padding: 3px; border: 1px solid transparent; }
 .imp-cell canvas { width: 100%; aspect-ratio: 1; }
-.imp-cell input { width: 100%; text-align: center; border: 0; background: var(--panel-2); border-radius: 4px; height: 22px; font-size: 13px; }
+.imp-cell input { width: 100%; text-align: center; border: 1px solid var(--line); background: var(--panel-2); color: var(--fg); border-radius: 4px; height: 26px; font-size: 15px; font-weight: 600; margin-top: 3px; }
+.imp-cell input:focus { outline: none; border-color: var(--accent); }
 .imp-cell.skip { opacity: 0.35; }
 .imp-cell.match-low input { box-shadow: 0 0 0 1px var(--warn); }
 .imp-files { display: flex; gap: 6px; flex-wrap: wrap; }

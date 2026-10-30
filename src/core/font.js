@@ -37,15 +37,18 @@ export function createGlyph(char, image, extra = {}) {
   };
 }
 
+/** Drawn width in font units (image width × scale × horizontal stretch). */
+export function glyphWidth(g) { return g.image ? g.image.width * g.scale * (g.sx || 1) : 0; }
+
 export function glyphSize(g) {
   if (!g.image) return { w: 0, h: 0 };
-  return { w: g.image.width * g.scale, h: g.image.height * g.scale };
+  return { w: glyphWidth(g), h: g.image.height * g.scale };
 }
 
 /** Advance width in font units. */
 export function glyphAdvance(font, g) {
   if (!g || !g.image) return font.spacing.space;
-  return g.lsb + g.image.width * g.scale + g.rsb;
+  return g.lsb + glyphWidth(g) + g.rsb;
 }
 
 /** Top of the glyph above the baseline (font units). */
@@ -213,7 +216,7 @@ const profileCache = new WeakMap();
 
 /** Horizontal ink profiles across BANDS bands spanning descender..ascender (font units). */
 export function glyphProfile(font, g) {
-  const key = `${g.rev}:${font.metrics.ascender}:${font.metrics.descender}:${g.lsb}:${g.rsb}:${g.scale}:${g.baseline}`;
+  const key = `${g.rev}:${font.metrics.ascender}:${font.metrics.descender}:${g.lsb}:${g.rsb}:${g.scale}:${g.sx || 1}:${g.baseline}`;
   const hit = profileCache.get(g);
   if (hit && hit.key === key) return hit;
   const left = new Float32Array(BANDS).fill(Infinity), right = new Float32Array(BANDS).fill(Infinity);
@@ -230,7 +233,8 @@ export function glyphProfile(font, g) {
       for (let x = 0; x < W; x++) if (data[(y * W + x) * 4 + 3] > 96) { x0 = x; break; }
       if (x0 < 0) continue;
       for (let x = W - 1; x >= 0; x--) if (data[(y * W + x) * 4 + 3] > 96) { x1 = x; break; }
-      const l = g.lsb + x0 * g.scale, r = adv - (g.lsb + (x1 + 1) * g.scale);
+      const hs = g.scale * (g.sx || 1);
+      const l = g.lsb + x0 * hs, r = adv - (g.lsb + (x1 + 1) * hs);
       if (l < left[b]) left[b] = l;
       if (r < right[b]) right[b] = r;
     }
@@ -266,7 +270,7 @@ export function opticalKern(font, a, b) {
   const target = Math.max(0, pairGap(font, ref, ref));
   const gap = pairGap(font, a, b);
   let k = gap === Infinity ? 0 : target - gap;
-  const minW = Math.min(a.image.width * a.scale, b.image.width * b.scale);
+  const minW = Math.min(glyphWidth(a), glyphWidth(b));
   k = Math.max(-minW * 0.45, Math.min(font.metrics.capHeight * 0.15, k));
   k = Math.round(k * 0.85);
   opticalCache.set(key, k);
@@ -371,7 +375,7 @@ export function fontToJSON(font) {
       file: g.image ? `glyphs/${[...g.char].map((c) => c.codePointAt(0).toString(16).padStart(4, '0')).join('_')}.png` : null,
       w: g.image ? g.image.width : 0,
       h: g.image ? g.image.height : 0,
-      lsb: g.lsb, rsb: g.rsb, baseline: +g.baseline.toFixed(3), scale: g.scale, autoBaseline: g.autoBaseline, autoScale: !!g.autoScale, round: g.round ?? null,
+      lsb: g.lsb, rsb: g.rsb, baseline: +g.baseline.toFixed(3), scale: g.scale, sx: g.sx || 1, autoSx: !!g.autoSx, autoBaseline: g.autoBaseline, autoScale: !!g.autoScale, round: g.round ?? null,
     });
   }
   return {
@@ -393,7 +397,7 @@ export function fontFromJSON(json, images) {
   });
   for (const gj of json.glyphs || []) {
     const image = gj.file ? images.get(gj.file) || null : null;
-    const g = createGlyph(gj.char, image, { lsb: gj.lsb || 0, rsb: gj.rsb || 0, baseline: gj.baseline ?? (image ? image.height : 0), scale: gj.scale || 1, autoBaseline: gj.autoBaseline !== false, autoScale: !!gj.autoScale, round: gj.round ?? null });
+    const g = createGlyph(gj.char, image, { lsb: gj.lsb || 0, rsb: gj.rsb || 0, baseline: gj.baseline ?? (image ? image.height : 0), scale: gj.scale || 1, autoBaseline: gj.autoBaseline !== false, autoScale: !!gj.autoScale, round: gj.round ?? null, sx: gj.sx || 1, autoSx: !!gj.autoSx });
     font.glyphs.set(gj.char, g);
   }
   return font;

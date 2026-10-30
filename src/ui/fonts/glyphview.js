@@ -1,6 +1,6 @@
 // Drawing a glyph on its guides (sheet cells and the large inspector preview).
 import { imageToCanvas } from '../../render/glyphs.js';
-import { glyphAdvance } from '../../core/font.js';
+import { glyphAdvance, glyphWidth } from '../../core/font.js';
 
 export function css(n) { return getComputedStyle(document.documentElement).getPropertyValue(n).trim() || '#888'; }
 
@@ -39,7 +39,7 @@ export function drawGlyphOnGuides(canvas, font, g, guides, { w, h, pad = 10, zoo
   ctx.globalAlpha = 1;
   if (g && g.image) {
     const gx = originX + g.lsb * scale, gy = baselineY - g.baseline * g.scale * scale;
-    const gw = g.image.width * g.scale * scale, gh = g.image.height * g.scale * scale;
+    const gw = glyphWidth(g) * scale, gh = g.image.height * g.scale * scale;
     ctx.imageSmoothingQuality = 'high';
     ctx.drawImage(imageToCanvas(g.image), gx, gy, gw, gh);
     if (guides.bounds) { ctx.strokeStyle = css('--cyan'); ctx.setLineDash([2, 2]); ctx.strokeRect(gx + 0.5, gy + 0.5, gw - 1, gh - 1); ctx.setLineDash([]); }

@@ -2,7 +2,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { readPNG, encodePNG, decodePNG } from './lib/png-node.mjs';
-import { detectGrid, sliceCells, processCell } from '../src/core/image.js';
+import { detectGrid, extractGlyphs } from '../src/core/image.js';
 import { LAYOUTS } from '../src/core/charsets.js';
 import { createFont, setGlyph, autoMetrics, fontToJSON, rankLayouts, normalizeSizes } from '../src/core/font.js';
 import { zipSync } from '../src/core/zip.js';
@@ -14,7 +14,7 @@ fs.mkdirSync(outDir, { recursive: true });
 function sliceSheet(file) {
   const img = readPNG(file);
   const grid = detectGrid(img, { rows: 6, cols: 6 });
-  const cells = sliceCells(img, grid, 3).map((c) => ({ ...c, ...processCell(c.image) }));
+  const cells = extractGlyphs(img, grid);
   return { img, grid, cells };
 }
 
@@ -39,8 +39,10 @@ function buildFont(name, variant, sheets, refFont) {
       setGlyph(font, ch, c.image);
     });
   }
-  const changes = normalizeSizes(font);
-  console.log('  evened sizes:', changes.map((c) => `${c.char}×${c.to.toFixed(2)}`).join(' '));
+  if (!process.env.NO_EVEN) {
+    const changes = normalizeSizes(font);
+    console.log('  evened sizes:', changes.map((c) => `${c.char}×${c.to.toFixed(2)}`).join(' ') || 'none');
+  }
   autoMetrics(font);
   return font;
 }

@@ -64,19 +64,12 @@ function isGrayish(r, g, b, tol) {
 }
 
 /**
- * Remove grid-line remnants in a band along the image border: rows/columns in the band
- * that are mostly covered, and low-saturation grey pixels (grid colour) inside the band.
+ * Remove grid-line remnants in a band along the image border. Only grid-coloured (low-saturation grey)
+ * pixels are removed, so glyph artwork that reaches into the band is never cut.
  */
-export function clearBorderLines(img, { band = 10, coverage = 0.4, grayTol = 26, alphaMin = 30 } = {}) {
+export function clearBorderLines(img, { band = 10, grayTol = 26, alphaMin = 30 } = {}) {
   const { width: W, height: H, data } = img;
-  const clearPx = (x, y) => { data[(y * W + x) * 4 + 3] = 0; };
-  const rowCov = (y) => { let n = 0; for (let x = 0; x < W; x++) if (data[(y * W + x) * 4 + 3] > alphaMin) n++; return n / W; };
-  const colCov = (x) => { let n = 0; for (let y = 0; y < H; y++) if (data[(y * W + x) * 4 + 3] > alphaMin) n++; return n / H; };
   const b = Math.min(band, Math.floor(Math.min(W, H) / 4));
-  for (let i = 0; i < b; i++) {
-    for (const y of [i, H - 1 - i]) if (rowCov(y) > coverage) for (let x = 0; x < W; x++) clearPx(x, y);
-    for (const x of [i, W - 1 - i]) if (colCov(x) > coverage) for (let y = 0; y < H; y++) clearPx(x, y);
-  }
   if (grayTol > 0) {
     for (let y = 0; y < H; y++) {
       for (let x = 0; x < W; x++) {
@@ -261,11 +254,208 @@ export function sliceCells(img, grid, inset = 3) {
 export function processCell(cellImage, opts = {}) {
   const img = cloneImage(cellImage);
   if (opts.clearLines !== false) clearBorderLines(img, opts.lines || {});
+  removeFaintNoise(img.data, img.width, img.height, opts.softEdge ?? 3, opts.cleanupOpts?.high ?? 160);
+  if (opts.streaks !== false) removeThinStreaks(img.data, img.width, img.height, opts.cleanupOpts?.low ?? 24);
   const cleaned = opts.cleanup === false ? { image: img } : cleanupAlpha(img, opts.cleanupOpts || {});
   const empty = isMostlyEmpty(cleaned.image, opts.minPixels ?? 40);
   if (empty) return { image: null, offsetX: 0, offsetY: 0, empty: true };
   const t = trimImage(cleaned.image, 0, opts.pad ?? 1);
   return { image: t.image, offsetX: t.x, offsetY: t.y, empty: false };
+}
+
+/**
+ * Remove faint noise: keep semi-transparent pixels only within `keepPx` of solid artwork (alpha ≥ solid),
+ * which is where anti-aliased edges live. Works in place on RGBA data.
+ */
+export function removeFaintNoise(data, W, H, keepPx = 3, solid = 128) {
+  const N = W * H;
+  let near = new Uint8Array(N);
+  for (let p = 0; p < N; p++) near[p] = data[p * 4 + 3] >= solid ? 1 : 0;
+  for (let k = 0; k < keepPx; k++) {
+    const next = new Uint8Array(near);
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+      const p = y * W + x;
+      if (near[p]) continue;
+      if ((x > 0 && near[p - 1]) || (x < W - 1 && near[p + 1]) || (y > 0 && near[p - W]) || (y < H - 1 && near[p + W])) next[p] = 1;
+    }
+    near = next;
+  }
+  for (let p = 0; p < N; p++) if (!near[p] && data[p * 4 + 3]) { data[p * 4] = 0; data[p * 4 + 1] = 0; data[p * 4 + 2] = 0; data[p * 4 + 3] = 0; }
+  return data;
+}
+
+/** Remove streaks and spurs thinner than 3 px (morphological opening of the visible mask). In place. */
+export function removeThinStreaks(data, W, H, low = 24) {
+  const N = W * H;
+  const m = new Uint8Array(N);
+  for (let p = 0; p < N; p++) m[p] = data[p * 4 + 3] > low ? 1 : 0;
+  const pass = (src, keepIf) => {
+    const out = new Uint8Array(N);
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+      let all = 1, any = 0;
+      for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+        const X = x + dx, Y = y + dy;
+        const v = X >= 0 && Y >= 0 && X < W && Y < H ? src[Y * W + X] : 0;
+        all &= v; any |= v;
+      }
+      out[y * W + x] = keepIf === 'all' ? all : any;
+    }
+    return out;
+  };
+  const opened = pass(pass(m, 'all'), 'any');
+  for (let p = 0; p < N; p++) if (m[p] && !opened[p]) { data[p * 4] = 0; data[p * 4 + 1] = 0; data[p * 4 + 2] = 0; data[p * 4 + 3] = 0; }
+  return data;
+}
+
+/**
+ * Shape-based extraction for a whole sheet: grid-line pixels are removed, connected shapes are found across
+ * the sheet, and each shape belongs to the cell its centre falls in. Glyphs that cross a grid line keep all
+ * of their artwork; parts of neighbours that reach into a cell are left out.
+ * Returns cells [{ index, row, col, x, y, w, h, image, offsetX, offsetY, empty }] with offsets relative to the cell.
+ */
+export function extractGlyphs(img, grid, opts = {}) {
+  const { low = 24, high = 160, minArea = 24, minRelative = 0.004, grayTol = 26, lineBand = 4, clearLines = true, softEdge = 3, streaks = true } = opts;
+  const { width: W, height: H } = img;
+  const N = W * H;
+  const data = new Uint8ClampedArray(img.data);
+  const colOf = new Int16Array(W).fill(-1), rowOf = new Int16Array(H).fill(-1);
+  for (let x = 0; x < W; x++) for (let i = 0; i < grid.cols; i++) if (x >= grid.xs[i] && x < grid.xs[i + 1]) colOf[x] = i;
+  for (let y = 0; y < H; y++) for (let i = 0; i < grid.rows; i++) if (y >= grid.ys[i] && y < grid.ys[i + 1]) rowOf[y] = i;
+  const cellAt = (x, y) => (colOf[x] < 0 || rowOf[y] < 0 ? -1 : rowOf[y] * grid.cols + colOf[x]);
+  // the grid-line zone: a band around every detected line (lineX/lineY = which line, or -1)
+  const lineX = new Int32Array(W).fill(-1), lineY = new Int32Array(H).fill(-1);
+  if (clearLines) {
+    for (const gx of grid.xs) for (let x = Math.max(0, gx - lineBand); x <= Math.min(W - 1, gx + lineBand); x++) lineX[x] = gx;
+    for (const gy of grid.ys) for (let y = Math.max(0, gy - lineBand); y <= Math.min(H - 1, gy + lineBand); y++) lineY[y] = gy;
+  }
+  const inZone = (p) => lineX[p % W] >= 0 || lineY[(p / W) | 0] >= 0;
+
+  // 1. erase grid lines: grey pixels and the faint fringe inside the line zone
+  if (clearLines) for (let p = 0; p < N; p++) {
+    if (!inZone(p)) continue;
+    const i = p * 4;
+    if (data[i + 3] <= 70 || isGrayish(data[i], data[i + 1], data[i + 2], grayTol)) data[i + 3] = 0;
+  }
+
+  // faint noise far from any solid artwork (invisible specks and trails) would join shapes and stretch bounds
+  removeFaintNoise(data, W, H, softEdge, high);
+  if (streaks) removeThinStreaks(data, W, H, low);
+
+  // 2. connected shapes over the whole sheet
+  const mask = new Uint8Array(N);
+  for (let p = 0; p < N; p++) mask[p] = data[p * 4 + 3] > low ? 1 : 0;
+  const { labels, comps } = labelComponents(mask, W, H);
+  let M = comps.length;
+  const zoneCount = new Int32Array(M);
+  for (let p = 0; p < N; p++) if (labels[p] >= 0 && inZone(p)) zoneCount[labels[p]]++;
+
+  // 3. a shape lying mostly in the line zone is line debris
+  const debris = new Uint8Array(M);
+  for (let i = 0; i < M; i++) if (zoneCount[i] >= comps[i].area * 0.6) debris[i] = 1;
+
+  // 4. a line drawn across a glyph cuts off a sliver: join slivers to the big shape directly across the line
+  const parent = Int32Array.from({ length: M }, (_, i) => i);
+  const find = (i) => { while (parent[i] !== i) { parent[i] = parent[parent[i]]; i = parent[i]; } return i; };
+  if (clearLines) {
+    const votes = new Map();
+    const vote = (f, k) => {
+      if (k < 0 || k === f || debris[k]) return;
+      let m = votes.get(f); if (!m) { m = new Map(); votes.set(f, m); }
+      m.set(k, (m.get(k) || 0) + 1);
+    };
+    for (let p = 0; p < N; p++) {
+      const f = labels[p];
+      if (f < 0 || debris[f]) continue;
+      const x = p % W, y = (p / W) | 0;
+      if (lineX[x] < 0 && x + 1 < W && lineX[x + 1] >= 0) { const gx = lineX[x + 1]; for (let d = gx + lineBand + 1; d <= Math.min(W - 1, gx + lineBand + 3); d++) vote(f, labels[y * W + d]); }
+      if (lineX[x] < 0 && x - 1 >= 0 && lineX[x - 1] >= 0) { const gx = lineX[x - 1]; for (let d = gx - lineBand - 1; d >= Math.max(0, gx - lineBand - 3); d--) vote(f, labels[y * W + d]); }
+      if (lineY[y] < 0 && y + 1 < H && lineY[y + 1] >= 0) { const gy = lineY[y + 1]; for (let d = gy + lineBand + 1; d <= Math.min(H - 1, gy + lineBand + 3); d++) vote(f, labels[d * W + x]); }
+      if (lineY[y] < 0 && y - 1 >= 0 && lineY[y - 1] >= 0) { const gy = lineY[y - 1]; for (let d = gy - lineBand - 1; d >= Math.max(0, gy - lineBand - 3); d--) vote(f, labels[d * W + x]); }
+    }
+    for (const [f, m] of votes) {
+      const [k, n] = [...m].sort((a, b) => b[1] - a[1])[0];
+      // a sliver is much smaller than the glyph across the line and lines up with it along a good stretch
+      if (comps[f].area * 4 < comps[k].area && n >= 6) parent[find(f)] = find(k);
+    }
+  }
+
+  // 5. glyphs that touch a neighbour merge into one shape: split shapes with ≥ 20% of their pixels in two cells
+  for (let p = 0; p < N; p++) if (labels[p] >= 0) labels[p] = find(labels[p]);
+  const shares = new Map();
+  for (let p = 0; p < N; p++) {
+    const l = labels[p];
+    if (l < 0 || debris[l]) continue;
+    const k = cellAt(p % W, (p / W) | 0);
+    let m = shares.get(l); if (!m) { m = new Map(); shares.set(l, m); }
+    m.set(k, (m.get(k) || 0) + 1);
+  }
+  const split = new Set();
+  for (const [l, m] of shares) {
+    const total = [...m.values()].reduce((a, b) => a + b, 0);
+    if ([...m].filter(([k, n]) => k >= 0 && n >= total * 0.2 && n >= 400).length >= 2) split.add(l);
+  }
+  if (split.size) {
+    const parts = new Map();
+    for (let p = 0; p < N; p++) {
+      const l = labels[p];
+      if (!split.has(l)) continue;
+      const key = l + ':' + cellAt(p % W, (p / W) | 0);
+      let ni = parts.get(key);
+      if (ni === undefined) { ni = M++; parts.set(key, ni); }
+      labels[p] = ni;
+    }
+  }
+
+  // per-shape stats
+  const area = new Int32Array(M), x0s = new Int32Array(M).fill(W), y0s = new Int32Array(M).fill(H), x1s = new Int32Array(M), y1s = new Int32Array(M);
+  const sumX = new Float64Array(M), sumY = new Float64Array(M), solid = new Uint8Array(M), isDebris = new Uint8Array(M);
+  for (let p = 0; p < N; p++) {
+    const l = labels[p];
+    if (l < 0) continue;
+    const x = p % W, y = (p / W) | 0;
+    area[l]++; sumX[l] += x; sumY[l] += y;
+    if (x < x0s[l]) x0s[l] = x; if (x > x1s[l]) x1s[l] = x; if (y < y0s[l]) y0s[l] = y; if (y > y1s[l]) y1s[l] = y;
+    if (data[p * 4 + 3] >= high) solid[l] = 1;
+  }
+  for (let i = 0; i < debris.length; i++) if (debris[i]) isDebris[i] = 1;
+
+  // 6. assign shapes to cells by centre of mass
+  const byCell = new Map();
+  for (let i = 0; i < M; i++) {
+    if (!area[i] || isDebris[i] || !solid[i] || area[i] < minArea) continue;
+    const w = x1s[i] - x0s[i] + 1, h = y1s[i] - y0s[i] + 1;
+    if ((w <= 6 && h > 30) || (h <= 6 && w > 30)) continue;
+    const cell = cellAt(Math.round(sumX[i] / area[i]), Math.round(sumY[i] / area[i]));
+    if (cell < 0) continue;
+    if (!byCell.has(cell)) byCell.set(cell, []);
+    byCell.get(cell).push(i);
+  }
+
+  // 7. build each glyph from its own shapes only
+  const cells = [];
+  for (let r = 0; r < grid.rows; r++) for (let c = 0; c < grid.cols; c++) {
+    const index = r * grid.cols + c;
+    const cx = grid.xs[c], cy = grid.ys[r];
+    const base = { index, row: r, col: c, x: cx, y: cy, w: grid.xs[c + 1] - cx, h: grid.ys[r + 1] - cy };
+    let ids = byCell.get(index) || [];
+    const largest = Math.max(0, ...ids.map((i) => area[i]));
+    ids = ids.filter((i) => area[i] >= largest * minRelative);
+    if (!ids.length || largest < 40) { cells.push({ ...base, image: null, offsetX: 0, offsetY: 0, empty: true }); continue; }
+    const keep = new Set(ids);
+    let gx0 = W, gy0 = H, gx1 = 0, gy1 = 0;
+    for (const i of ids) { gx0 = Math.min(gx0, x0s[i]); gy0 = Math.min(gy0, y0s[i]); gx1 = Math.max(gx1, x1s[i]); gy1 = Math.max(gy1, y1s[i]); }
+    gx0 = Math.max(0, gx0 - 1); gy0 = Math.max(0, gy0 - 1); gx1 = Math.min(W - 1, gx1 + 1); gy1 = Math.min(H - 1, gy1 + 1);
+    const gw = gx1 - gx0 + 1, gh = gy1 - gy0 + 1;
+    const out = createImage(gw, gh);
+    for (let y = 0; y < gh; y++) for (let x = 0; x < gw; x++) {
+      const p = (gy0 + y) * W + (gx0 + x);
+      if (!keep.has(labels[p])) continue;
+      const si = p * 4, di = (y * gw + x) * 4;
+      out.data[di] = data[si]; out.data[di + 1] = data[si + 1]; out.data[di + 2] = data[si + 2]; out.data[di + 3] = data[si + 3];
+    }
+    cells.push({ ...base, image: out, offsetX: gx0 - cx, offsetY: gy0 - cy, empty: false, parts: opts.debug ? ids.map((i) => ({ area: area[i], x0: x0s[i], y0: y0s[i], x1: x1s[i], y1: y1s[i] })) : undefined });
+  }
+  return cells;
 }
 
 // ---------- pixel transforms ----------

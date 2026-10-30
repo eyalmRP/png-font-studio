@@ -249,3 +249,36 @@ test('warp refitted to a padded box bends the text the same way', () => {
   // the box the app bends needs no change
   assert.ok(Math.abs(fitWarpToBox(frame, frame, { style: 'twist', bend: 0.4, hDistort: 0, vDistort: 0 }).warp.bend - 0.4) < 1e-6);
 });
+
+test('Photoshop glyph frame: shared baseline, finest resolution, frame numbers survive a layer name', async () => {
+  const { glyphFrame, placeGlyph, frameName, parseFrameName, layerChar, inkBearings, alphaBox } = await import('../src/core/glyphframe.js');
+  const { createFont, createGlyph } = await import('../src/core/font.js');
+  const img = (w, hh, fill = (x, y) => x >= 2 && x < w - 2) => {
+    const data = new Uint8ClampedArray(w * hh * 4);
+    for (let y = 0; y < hh; y++) for (let x = 0; x < w; x++) if (fill(x, y)) data.set([200, 40, 90, 255], (y * w + x) * 4);
+    return { width: w, height: hh, data };
+  };
+  const font = createFont('t');
+  font.glyphs.set('A', createGlyph('A', img(100, 160), { scale: 1, baseline: 155, lsb: 4, rsb: 6 }));
+  font.glyphs.set('g', createGlyph('g', img(60, 120), { scale: 0.8, baseline: 80, lsb: 3, rsb: 3 }));
+  const fr = glyphFrame(font);
+  assert.ok(Math.abs(fr.p - 1.25) < 1e-9); // the finer glyph (0.8 units per pixel) sets the resolution
+  for (const g of font.glyphs.values()) {
+    const pl = placeGlyph(fr, g);
+    // the glyph's own baseline row lands on the frame baseline, inside the canvas
+    assert.ok(Math.abs(pl.y + g.baseline * g.scale * fr.p - fr.baseline) <= 0.5);
+    assert.ok(pl.x >= 0 && pl.y >= 0 && pl.x + pl.w <= fr.w && pl.y + pl.h <= fr.h);
+  }
+  assert.equal(placeGlyph(fr, font.glyphs.get('g')).exact, true); // drawn 1:1
+  assert.equal(placeGlyph(fr, font.glyphs.get('A')).exact, false); // scaled up 1.25×, never down
+  const back = parseFrameName(frameName(fr));
+  assert.deepEqual(back, { p: fr.p, baseline: fr.baseline, w: fr.w, h: fr.h });
+  assert.equal(parseFrameName('Layer 1'), null);
+  assert.equal(layerChar('A'), 'A');
+  assert.equal(layerChar(' ש '), 'ש');
+  assert.equal(layerChar('U+20AA'), '₪');
+  assert.equal(layerChar('A copy'), null);
+  // bearings are measured to the visible pixels: 2 transparent columns each side here
+  assert.deepEqual(inkBearings(font.glyphs.get('A')), { left: 6, right: 8 });
+  assert.deepEqual(alphaBox(img(10, 4)), { l: 2, t: 0, r: 7, b: 3 });
+});

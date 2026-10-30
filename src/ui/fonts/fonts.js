@@ -20,6 +20,7 @@ import { decodeImage, fontToZip, fontFromZipBytes, saveFile, safeName } from '..
 import { FACE_PRESETS, dominantHue, paletteFromStops, resolvePalette, remapPalette } from '../../core/recolor.js';
 import { saveFontRecord, deleteFontRecord } from '../../storage/library.js';
 import { drawSample } from '../sample.js';
+import { exportFontPSD, updateFromPSD } from './psd.js';
 
 const GROUP_FILTERS = ['all', 'upper', 'lower', 'digits', 'punct', 'symbols', 'hebrew', 'other', 'missing'];
 const GROUP_LABEL = { all: 'All', upper: 'Uppercase', lower: 'Lowercase', digits: 'Digits', punct: 'Punctuation', symbols: 'Symbols', hebrew: 'Hebrew', other: 'Other', missing: 'Missing' };
@@ -84,6 +85,28 @@ export function mountFonts({ left, right, center, exportSlot }) {
       const r = await saveFile(`${safeName(f.name, 'font')}.font.zip`, new Blob([zip], { type: 'application/zip' }));
       if (r === 'saved') toast(t('Font saved'), 'ok');
     } catch (e) { toast(e.message, 'error', 5000); }
+  }
+
+  // Photoshop round trip: one glyph-size PSD with a layer per character
+  async function exportPSD(f) {
+    try {
+      toast(t('Preparing the Photoshop file…'), 'info', 2500);
+      if ((await exportFontPSD(f)) === 'saved') toast(t('Saved {name}', { name: `${safeName(f.name, 'font')} for Photoshop.zip` }), 'ok');
+    } catch (e) { toast(e.message, 'error', 6000); }
+  }
+  async function importPSD(f) {
+    const [file] = await pickFiles({ accept: '.psd,.zip,image/vnd.adobe.photoshop,application/zip', multiple: false });
+    if (!file) return;
+    try {
+      await updateFromPSD(f, file, {
+        beforeUpdate: () => checkpoint('font:' + f.id, 'Update from Photoshop'),
+        onApply: (target, asNew) => {
+          if (asNew) { addFont(target); saveFontRecord(target); toast(t('Created {name}', { name: target.name }), 'ok'); }
+          else { fontChanged(target); emit('fonts'); toast(t('Updated {name}', { name: target.name }), 'ok'); }
+          afterFontEdit(target);
+        },
+      });
+    } catch (e) { toast(e.message, 'error', 6000); }
   }
 
   async function openFontFile() {
@@ -508,6 +531,8 @@ export function mountFonts({ left, right, center, exportSlot }) {
         button({ label: t('Auto-place all'), icon: 'wand', onClick: remeasure }),
         button({ label: t('Even out sizes'), icon: 'arrowsV', onClick: () => setM('Even out sizes', (fo) => { const ch = normalizeSizes(fo); autoMetrics(fo); toast(ch.length ? t('Resized {n} glyphs: {list}', { n: ch.length, list: ch.map((c) => c.char).join(' ') }) : t('Sizes are already even'), 'ok', 4000); }) }),
         button({ label: t('Save font file'), icon: 'save', onClick: () => saveFontFile(font) }),
+        button({ label: t('Edit in Photoshop'), icon: 'layers', title: t('A PSD the size of one glyph, with every character on its own layer over the guides'), onClick: () => exportPSD(font) }),
+        button({ label: t('Update from Photoshop'), icon: 'upload', title: t('Read an edited PSD back into this font, or into a new one'), onClick: () => importPSD(font) }),
       ),
       h('p.hint', t('Even out sizes fixes sheets where each cell was scaled to fill its box, keeping the optical overshoot of round letters.')));
   }

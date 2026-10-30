@@ -9,7 +9,7 @@ import { resolveLevels, visualOrder } from '../src/core/bidi.js';
 import { createDoc, insertText, deleteRange, applyCharStyle, docToJSON, docFromJSON, paraRanges } from '../src/core/textdoc.js';
 import { layoutDoc, caretAt, hitTest, selectionRects, inkBounds } from '../src/core/layout.js';
 import { evaluate, DEFAULT_ANIM } from '../src/core/anim.js';
-import { buildMesh, inverseMap, forwardMap } from '../src/core/warp.js';
+import { buildMesh, inverseMap, forwardMap, fitWarpToBox, warpLocal } from '../src/core/warp.js';
 import { distanceOutside } from '../src/core/fx.js';
 import { parseMapping, mappingToString } from '../src/core/charsets.js';
 
@@ -231,4 +231,21 @@ test('palette transfer recolours each colour band of a design towards its target
   assert.ok(Math.abs(hueOf(data[0], data[1], data[2]) - 45) < 6, 'face becomes the face target');
   assert.ok(hueOf(data[4], data[5], data[6]) < 30, 'rim becomes the rim target');
   assert.deepEqual([...data.slice(8, 11)], [250, 250, 255], 'white highlight stays');
+});
+
+test('warp refitted to a padded box bends the text the same way', () => {
+  const frame = { x: -500, y: -80, w: 1000, h: 160 };
+  const tall = { x: -500, y: -280, w: 1000, h: 560 };
+  // an arc is a circle around the box centre: extra height leaves it alone, extra width needs a stronger bend
+  const arc = { style: 'arc', bend: 0.5, hDistort: 0, vDistort: 0 };
+  assert.ok(Math.abs(fitWarpToBox(frame, tall, arc).warp.bend - 0.5) < 1e-3);
+  const wide = fitWarpToBox(frame, { x: -560, y: -80, w: 1120, h: 160 }, arc);
+  assert.ok(Math.abs(wide.warp.bend - 0.56) < 2e-3 && wide.err < 0.05);
+  // a flag's swing scales with the box height
+  const flag = fitWarpToBox(frame, tall, { style: 'flag', bend: 0.5, hDistort: 0, vDistort: 0 });
+  assert.ok(Math.abs(flag.warp.bend - 0.5 * 160 / 560) < 2e-3 && flag.err < 0.05);
+  const [x, y] = warpLocal(tall, flag.warp, 250, 30), [ex, ey] = warpLocal(frame, { ...flag.warp, bend: 0.5 }, 250, 30);
+  assert.ok(Math.hypot(x - ex, y - ey) < 0.05);
+  // the box the app bends needs no change
+  assert.ok(Math.abs(fitWarpToBox(frame, frame, { style: 'twist', bend: 0.4, hDistort: 0, vDistort: 0 }).warp.bend - 0.4) < 1e-6);
 });

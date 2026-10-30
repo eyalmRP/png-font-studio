@@ -7,7 +7,7 @@ import { getLayout, getFrame, hasAnim, layerVisibleAt, renderLayer } from '../re
 import { prepareText } from '../render/text.js';
 import { glyphCanvas } from '../render/glyphs.js';
 import { evaluate } from '../core/anim.js';
-import { isEnvelopeWarp } from '../core/warp.js';
+import { isEnvelopeWarp, fitWarpToBox } from '../core/warp.js';
 import { effectMargin } from '../core/effects-def.js';
 import { canvasToBlob, safeName } from '../storage/files.js';
 import { zipSync } from '../core/zip.js';
@@ -143,13 +143,20 @@ export async function exportAEComp(project, opts, layers, progress = () => {}, i
     if (x0 === Infinity) continue;
     const fxOn = layer.effects.filter((e) => e.enabled);
     const pad = Math.max(0, ...fxOn.map(effectMargin)) + 8;
-    // After Effects' Warp bends the whole layer, so a warped title's letters precomp is exactly the box the app
-    // bends; other letter precomps get room for the animation and the effects
-    let ox, oy, W, H;
+    // After Effects' Warp bends the whole layer. A warped title's letters precomp is centred on the box the app
+    // bends, with room on each side for letters that animate outside it, and the warp is refitted to that size.
+    // Other letter precomps get room for the animation and the effects.
+    let ox, oy, W, H, warp = layer.warp;
     if (aeWarp) {
       const f = getFrame(layer);
-      ox = f.x; oy = f.y; W = Math.ceil(f.w * q); H = Math.ceil(f.h * q);
-      if (x0 < f.x - 1 || y0 < f.y - 1 || x1 > f.x + f.w + 1 || y1 > f.y + f.h + 1) notes.push(`${layer.name}: letters move outside the warped box and are cut off in its precomp`);
+      const px = Math.max(0, f.x - x0, x1 - f.x - f.w), py = Math.max(0, f.y - y0, y1 - f.y - f.h);
+      W = Math.ceil((f.w + (px > 0.5 ? px + 2 : 0) * 2) * q); H = Math.ceil((f.h + (py > 0.5 ? py + 2 : 0) * 2) * q);
+      ox = f.x + f.w / 2 - W / q / 2; oy = f.y + f.h / 2 - H / q / 2;
+      if (px > 0.5 || py > 0.5) {
+        const fit = fitWarpToBox(f, { x: ox, y: oy, w: W / q, h: H / q }, layer.warp);
+        warp = fit.warp;
+        if (fit.err > f.h * 0.02) notes.push(`${layer.name}: with room for the animation, After Effects' ${layer.warp.style} warp can only come close (Bend refitted to ${Math.round(warp.bend * 100)}%, about ${Math.round((100 * fit.err) / f.h)}% of the text height off); compare it with the app`);
+      }
     } else {
       ox = x0 - pad; oy = y0 - pad; W = Math.ceil((x1 - x0 + pad * 2) * q); H = Math.ceil((y1 - y0 + pad * 2) * q);
     }
@@ -267,7 +274,7 @@ export async function exportAEComp(project, opts, layers, progress = () => {}, i
       scale: [r4(layer.scaleX * k), r4(layer.scaleY * k)], rotation: r4(layer.rotation), opacity: layer.opacity,
       blend: AE_BLEND[layer.blend] || 'NORMAL', locked: !!layer.locked,
       inPoint: animated ? r4(Math.max(0, layer.anim?.start ?? 0)) : 0, outPoint: animated ? r4(Math.min(duration, layer.anim?.end ?? duration)) : duration,
-      warp: aeWarp ? { style: aeWarp, axis: layer.warp.vertical ? 2 : 1, bend: r4(layer.warp.bend * 100), h: r4(layer.warp.hDistort * 100), v: r4(layer.warp.vDistort * 100) } : null,
+      warp: aeWarp ? { style: aeWarp, axis: warp.vertical ? 2 : 1, bend: r4(warp.bend * 100), h: r4(warp.hDistort * 100), v: r4(warp.vDistort * 100) } : null,
       styles, fx, blur, S, smear, reflection, letters: tracks,
     });
     done++;
@@ -307,8 +314,8 @@ function readme(base, notes) {
     '     its layer in the title comp; the long shadow fades through a gradient matte above it.',
     '   - "<title> reflection" in the main comp: a mirrored copy of the title, parented to it and faded with a',
     '     feathered mask.',
-    '5. Warp bends the whole layer, so a warped title\'s letters precomp is cut to the text\'s box. If you make that',
-    '   precomp bigger, the same Bend looks softer.',
+    '5. Warp bends the whole layer, so a warped title\'s letters precomp is centred on the text, with room for letters',
+    '   that animate outside it, and Bend is refitted to that size. If you resize that precomp, adjust Bend to match.',
     '',
     notes.length ? 'Not recreated:\n- ' + notes.join('\n- ') : 'Everything was recreated.',
     '',

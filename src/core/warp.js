@@ -208,6 +208,43 @@ export function warpLocal(frame, warp, x, y) {
   return [cx + u * half, cy + v * half];
 }
 
+/**
+ * Warp settings that bend the text in `frame` as `warp` does, when the warp's reference box is the larger `box`
+ * (same centre). Fits bend (and the distortions when they are in use) over the text; returns { warp, err } with
+ * err the RMS position error in frame units.
+ */
+export function fitWarpToBox(frame, box, warp) {
+  const pts = [];
+  for (let i = 0; i <= 24; i++) for (let j = 0; j <= 8; j++) pts.push([frame.x + (frame.w * i) / 24, frame.y + (frame.h * j) / 8]);
+  const target = pts.map(([x, y]) => warpLocal(frame, warp, x, y));
+  const keys = warp.hDistort || warp.vDistort ? ['bend', 'hDistort', 'vDistort'] : ['bend'];
+  const err = (p) => {
+    const w = { ...warp };
+    keys.forEach((k, i) => { w[k] = p[i]; });
+    let s = 0;
+    pts.forEach(([x, y], i) => { const [X, Y] = warpLocal(box, w, x, y); s += (X - target[i][0]) ** 2 + (Y - target[i][1]) ** 2; });
+    return Math.sqrt(s / pts.length);
+  };
+  const clamp = (v) => Math.max(-1, Math.min(1, v));
+  // start from the bend as it is and as scaled by the box's growth, then walk each setting downhill
+  const starts = [1, frame.h / box.h, box.w / frame.w].map((k) => keys.map((key, i) => (i === 0 ? clamp(warp.bend * k) : warp[key] || 0)));
+  let p = starts.reduce((a, b) => (err(b) < err(a) ? b : a));
+  let best = err(p);
+  for (let step = 0.1; step > 1e-5;) {
+    let moved = false;
+    for (let i = 0; i < keys.length; i++) for (const d of [step, -step]) {
+      const c = p.slice();
+      c[i] = clamp(c[i] + d);
+      const e = err(c);
+      if (e < best - 1e-12) { p = c; best = e; moved = true; }
+    }
+    if (!moved) step /= 2;
+  }
+  const out = { ...warp };
+  keys.forEach((k, i) => { out[k] = p[i]; });
+  return { warp: out, err: best };
+}
+
 /** Mesh over a local rect for inverse lookups (hit testing on warped text). */
 export function localMesh(frame, warp, rect, cols = 48, rows = 16) {
   const src = new Float32Array((cols + 1) * (rows + 1) * 2), dst = new Float32Array(src.length);

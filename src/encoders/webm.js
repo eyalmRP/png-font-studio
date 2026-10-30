@@ -58,18 +58,20 @@ export function muxWebM({ width, height, frames, durationMs, fps }) {
 /** Spread colours into fully transparent pixels so chroma subsampling does not darken soft edges. */
 export function bleedColors(rgba, w, h, passes = 3) {
   const d = rgba;
+  const src = new Uint8ClampedArray(d.length);
+  const row = w * 4;
   for (let p = 0; p < passes; p++) {
-    const src = new Uint8ClampedArray(d);
+    src.set(d);
+    // a neighbour lends its colour when it is visible, or (after the first pass) already carries bled colour
+    const lends = (j) => src[j + 3] > 0 || (p > 0 && (src[j] || src[j + 1] || src[j + 2]));
     for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
-      const i = (y * w + x) * 4;
+      const i = y * row + x * 4;
       if (src[i + 3] > 0) continue;
       let r = 0, g = 0, b = 0, n = 0;
-      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
-        const X = x + dx, Y = y + dy;
-        if (X < 0 || Y < 0 || X >= w || Y >= h) continue;
-        const j = (Y * w + X) * 4;
-        if (src[j + 3] > 0 || (p > 0 && (src[j] || src[j + 1] || src[j + 2]))) { r += src[j]; g += src[j + 1]; b += src[j + 2]; n++; }
-      }
+      if (x + 1 < w && lends(i + 4)) { r += src[i + 4]; g += src[i + 5]; b += src[i + 6]; n++; }
+      if (x > 0 && lends(i - 4)) { r += src[i - 4]; g += src[i - 3]; b += src[i - 2]; n++; }
+      if (y + 1 < h && lends(i + row)) { r += src[i + row]; g += src[i + row + 1]; b += src[i + row + 2]; n++; }
+      if (y > 0 && lends(i - row)) { r += src[i - row]; g += src[i - row + 1]; b += src[i - row + 2]; n++; }
       if (n) { d[i] = r / n; d[i + 1] = g / n; d[i + 2] = b / n; }
     }
   }

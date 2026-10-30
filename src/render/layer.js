@@ -117,13 +117,15 @@ export function drawLayers(ctx, project, time, base, opts = {}) {
 }
 
 /** Render the artboard to a new canvas (export). */
-export function renderFrame(project, time, scale = 1, { background = false, crop = null } = {}) {
+export function renderFrame(project, time, scale = 1, { background = false, crop = null, fill = null } = {}) {
   const ab = project.artboard;
   const area = crop || { x: 0, y: 0, w: ab.w, h: ab.h };
   const W = Math.max(1, Math.round(area.w * scale)), H = Math.max(1, Math.round(area.h * scale));
   const canvas = makeCanvas(W, H);
   const ctx = canvas.getContext('2d');
-  if (background && ab.bg === 'color') { ctx.fillStyle = ab.bgColor; ctx.fillRect(0, 0, W, H); }
+  // fill: a colour under everything, even on a transparent artboard (formats that cannot store transparency)
+  const under = fill || (background && ab.bg === 'color' ? ab.bgColor : null);
+  if (under) { ctx.fillStyle = under; ctx.fillRect(0, 0, W, H); }
   drawLayers(ctx, project, time, new DOMMatrix().scale(scale).translate(-area.x, -area.y), { quality: 1 });
   return canvas;
 }

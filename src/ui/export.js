@@ -21,7 +21,7 @@ const FORMATS = [
   { id: 'pngseq', label: 'PNG sequence', desc: 'Every frame as PNG in a ZIP. Imports into After Effects, Premiere, DaVinci, Final Cut.' },
   { id: 'webm', label: 'WebM video', desc: 'VP9 with alpha. Plays in Chrome, OBS and web pages.' },
   { id: 'mov', label: 'MOV video', desc: 'QuickTime Animation codec with alpha (lossless).', standaloneOnly: true },
-  { id: 'mp4', label: 'MP4 video', desc: 'H.264 on the background colour (MP4 has no alpha).' },
+  { id: 'mp4', label: 'MP4 video', desc: 'H.264. MP4 has no alpha: a transparent title comes with a luma matte video.' },
   { id: 'gif', label: 'GIF', desc: 'For chat stickers. Edges are hard (1-bit transparency).' },
   { id: 'apng', label: 'Animated PNG', desc: 'Soft transparency, plays in all browsers.' },
   { id: 'webp', label: 'Animated WebP', desc: 'Small files with soft transparency.' },
@@ -29,7 +29,7 @@ const FORMATS = [
 ];
 
 export async function openExport() {
-  const DEFAULTS = { format: 'png', scale: 1, trim: false, background: false, onlySelected: false, loop: true, quality: 'high' };
+  const DEFAULTS = { format: 'png', scale: 1, trim: false, background: false, onlySelected: false, loop: true, quality: 'high', matte: true };
   const opts = storeGet('export', { ...DEFAULTS });
   const dl = await detectDownloads();
   const standalone = !inArtifact();
@@ -56,17 +56,20 @@ export async function openExport() {
     const fmt = FORMATS.find((f) => f.id === opts.format);
     const ab = state.project.artboard;
     const ae = opts.format === 'aecomp';
+    const mp4 = opts.format === 'mp4' ? mp4Kind(opts, ab) : null;
     const timed = !still && (!fmt.still || ae);
     optsEl.replaceChildren(...[
       h('div.field', h('span', t('Size')), pills({ value: opts.scale, options: [0.25, 0.5, 1, 2, 4].map((s) => ({ value: s, label: ltr(`${s}× · ${Math.round(ab.w * s)}×${Math.round(ab.h * s)}`) })), onChange: (v) => { opts.scale = v; render(); } })),
       ae ? null : toggle({ label: t('Trim to the title (crop away empty space)'), iconName: 'crop', value: opts.trim, onChange: (v) => { opts.trim = v; } }),
-      toggle({ label: t('Include background colour'), iconName: 'palette', value: opts.background || opts.format === 'mp4', onChange: (v) => { opts.background = v; } }),
+      toggle({ label: t('Include background colour'), iconName: 'palette', value: opts.background, onChange: (v) => { opts.background = v; if (opts.format === 'mp4') render(); } }),
+      mp4 && mp4 !== 'background' ? toggle({ label: t('Luma matte video for transparency'), iconName: 'contrast', value: opts.matte !== false, onChange: (v) => { opts.matte = v; render(); } }) : null,
       toggle({ label: t('Only the selected layer'), iconName: 'layers', value: opts.onlySelected, onChange: (v) => { opts.onlySelected = v; } }),
       timed ? h('div.field', h('span', t('Frame rate')), pills({ value: state.project.fps, options: [24, 25, 30, 50, 60].map((f) => ({ value: f, label: `${f} fps` })), onChange: (v) => { state.project.fps = v; syncTiming(); render(); } })) : null,
       timed ? h('p.hint', t('{n} frames, {s} s. The length comes from the animation presets and the hold time in the player.', { n: Math.max(1, Math.round(syncTiming() * state.project.fps)), s: +state.project.duration.toFixed(2) })) : null,
       ae ? h('p.hint', t('Size sets the composition size. Unzip, then in After Effects choose File > Scripts > Run Script File and pick the .jsx inside. Animation becomes keyframes on each letter; effects without an After Effects match are listed in the README.')) : null,
       ['gif', 'apng', 'webp'].includes(opts.format) ? toggle({ label: t('Loop forever'), iconName: 'repeat', value: opts.loop, onChange: (v) => { opts.loop = v; } }) : null,
-      opts.format === 'mp4' && ab.bg !== 'color' ? h('p.hint', t('MP4 cannot store transparency, so the artboard background colour is used.')) : null,
+      mp4 === 'matte' ? h('p.hint', t('MP4 cannot store transparency, so you get a ZIP with two videos: the colours, and a black-and-white matte (white where the title is). In your editor, put the matte above the colour video and use it as a luma matte (track matte).')) : null,
+      mp4 === 'flat' ? h('p.hint', t('MP4 cannot store transparency, so the artboard background colour is used.')) : null,
       still && !ae ? h('p.hint', t('This title is Still. Switch to Animated in the top bar to export video, GIF or a PNG sequence.')) : null,
     ].filter(Boolean));
   };
@@ -101,6 +104,12 @@ export async function openExport() {
   }
 }
 
+/** How an MP4 deals with transparency: on the artboard colour, with a luma matte video, or flat on the colour. */
+function mp4Kind(opts, ab) {
+  if (opts.background && ab.bg === 'color') return 'background';
+  return opts.matte !== false ? 'matte' : 'flat';
+}
+
 const sizeLabel = (n) => (n > 1048576 ? (n / 1048576).toFixed(1) + ' MB' : Math.round(n / 1024) + ' KB');
 
 function cropFor(opts, project, times) {
@@ -133,7 +142,9 @@ export async function exportAs(opts, progress = () => {}, isCancelled = () => fa
   syncTiming(project);
   const base = safeName(project.name === 'Untitled title' && project.layers[0] ? project.layers[0].name : project.name, 'title');
   const view = opts.onlySelected && selectedLayer() ? { ...project, layers: [selectedLayer()] } : project;
-  const bg = opts.background || opts.format === 'mp4';
+  const mp4 = opts.format === 'mp4' ? mp4Kind(opts, project.artboard) : null;
+  const bg = mp4 ? mp4 === 'background' : opts.background;
+  const fill = mp4 === 'flat' ? project.artboard.bgColor : null;
   const yieldUI = () => new Promise((r) => setTimeout(r, 0));
   if (opts.format === 'aecomp') return exportAEComp(project, opts, view.layers.filter((l) => l.visible), progress, isCancelled);
   if (opts.format === 'png') {
@@ -148,7 +159,7 @@ export async function exportAs(opts, progress = () => {}, isCancelled = () => fa
   const crop = cropFor(opts, view, times.filter((_, i) => i % 2 === 0 || i === n - 1));
   const even = ['webm', 'mp4'].includes(opts.format);
   const frameAt = (i) => {
-    let c = renderFrame(view, times[i], opts.scale, { background: bg, crop });
+    let c = renderFrame(view, times[i], opts.scale, { background: bg, crop, fill });
     if (even && (c.width % 2 || c.height % 2)) {
       const e = document.createElement('canvas');
       e.width = c.width + (c.width % 2); e.height = c.height + (c.height % 2);
@@ -218,7 +229,7 @@ export async function exportAs(opts, progress = () => {}, isCancelled = () => fa
       return { name: `${base}.mov`, blob: new Blob([encodeMOV(frames, w, hh, fps)], { type: 'video/quicktime' }) };
     }
     case 'webm': return encodeWebMAlpha(base, n, fps, frameAt, progress, isCancelled);
-    case 'mp4': return encodeVideo('mp4', base, n, fps, frameAt, progress, isCancelled);
+    case 'mp4': return mp4 === 'matte' ? encodeMP4Matte(base, n, fps, frameAt, progress, isCancelled) : encodeVideo('mp4', base, n, fps, frameAt, progress, isCancelled);
     default: throw new Error('Unknown format');
   }
 }
@@ -261,6 +272,74 @@ async function encodeWebMAlpha(base, n, fps, frameAt, progress, isCancelled) {
   const frames = color.map((f, i) => ({ ...f, alpha: alpha[i] ? alpha[i].data : null }));
   const bytes = muxWebM({ width: w, height: hh, frames, durationMs: (n * 1000) / fps, fps });
   return { name: `${base}.webm`, blob: new Blob([bytes], { type: 'video/webm' }) };
+}
+
+/**
+ * A transparent title as two H.264 videos in a ZIP: the colours (straight colour, run past the edges so they stay
+ * clean after compression) and a matte whose brightness is the alpha, for a luma matte in a video editor.
+ */
+async function encodeMP4Matte(base, n, fps, frameAt, progress, isCancelled) {
+  if (typeof VideoEncoder === 'undefined') throw new Error(t('This browser cannot encode video. Use Chrome or Edge, or export a PNG sequence.'));
+  const first = frameAt(0);
+  const w = first.width, hh = first.height;
+  const config = { codec: hh > 1080 || w > 1920 ? 'avc1.640033' : 'avc1.640028', width: w, height: hh, bitrate: Math.min(40e6, Math.max(4e6, w * hh * fps * 0.1)), framerate: fps };
+  const sup = await VideoEncoder.isConfigSupported(config).catch(() => ({ supported: false }));
+  if (!sup.supported) throw new Error(t('This browser cannot encode MP4 at this size. Try a smaller size or another browser.'));
+  let err = null;
+  const streams = ['fill', 'matte'].map(() => {
+    const target = new MP4Target();
+    const muxer = new MP4Muxer({ target, video: { codec: 'avc', width: w, height: hh }, fastStart: 'in-memory' });
+    const enc = new VideoEncoder({ output: (chunk, meta) => muxer.addVideoChunk(chunk, meta), error: (e) => { err = e; } });
+    enc.configure(config);
+    return { target, muxer, enc };
+  });
+  const close = () => streams.forEach((s) => { if (s.enc.state !== 'closed') s.enc.close(); });
+  for (let i = 0; i < n; i++) {
+    if (isCancelled()) { close(); return null; }
+    if (err) { close(); throw err; }
+    const c = i === 0 ? first : frameAt(i);
+    const px = c.getContext('2d').getImageData(0, 0, w, hh).data;
+    const matte = new Uint8ClampedArray(px.length);
+    for (let j = 0; j < px.length; j += 4) { const a = px[j + 3]; matte[j] = a; matte[j + 1] = a; matte[j + 2] = a; matte[j + 3] = 255; }
+    bleedColors(px, w, hh, 3);
+    const ts = Math.round((i * 1e6) / fps), dur = Math.round(1e6 / fps);
+    const key = i % (fps * 2) === 0;
+    [px, matte].forEach((data, k) => {
+      const vf = new VideoFrame(data, { format: 'RGBX', codedWidth: w, codedHeight: hh, timestamp: ts, duration: dur });
+      streams[k].enc.encode(vf, { keyFrame: key });
+      vf.close();
+    });
+    progress((i + 1) / n * 0.95, t('Frame {i} of {n}', { i: i + 1, n }));
+    if (streams[0].enc.encodeQueueSize > 6) await new Promise((r) => setTimeout(r, 10));
+    else if (i % 3 === 0) await new Promise((r) => setTimeout(r, 0));
+  }
+  for (const s of streams) { await s.enc.flush(); s.enc.close(); }
+  if (err) throw err;
+  const [fillMp4, matteMp4] = streams.map((s) => { s.muxer.finalize(); return new Uint8Array(s.target.buffer); });
+  const entries = [
+    { name: `${base}.mp4`, data: fillMp4 },
+    { name: `${base}_matte.mp4`, data: matteMp4 },
+    { name: MATTE_README, data: matteReadme(base) },
+  ];
+  return { name: `${base}_mp4_luma_matte.zip`, blob: new Blob([zipSync(entries)], { type: 'application/zip' }) };
+}
+
+const MATTE_README = 'How to use the matte.txt';
+function matteReadme(base) {
+  return [
+    `${base} - MP4 with a luma matte, from PNG Font Studio`,
+    '',
+    'MP4 cannot store transparency, so the title comes as two videos of the same size and length:',
+    `- ${base}.mp4: the colours. They run past the title's edges so the edges stay clean.`,
+    `- ${base}_matte.mp4: the matte. White where the title is, black where it is transparent, grey at soft edges.`,
+    '',
+    'Put the matte directly above the colour video and use it as a luma matte:',
+    `- After Effects: set the Track Matte of ${base}.mp4 to ${base}_matte.mp4 and choose Luma Matte.`,
+    `- Premiere Pro: add the Track Matte Key effect to ${base}.mp4, set Matte to the matte's track and`,
+    '  Composite Using to Matte Luma, then hide the matte track.',
+    '- Other editors: look for a luma matte, luma key with an external matte, or track matte.',
+    '',
+  ].join('\n');
 }
 
 async function encodeVideo(kind, base, n, fps, frameAt, progress, isCancelled) {

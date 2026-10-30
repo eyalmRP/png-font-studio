@@ -141,3 +141,15 @@ test('size groups are even after normalisation (r matches n)', () => {
   for (const v of xh) assert.ok(Math.abs(v / med - 1) <= 0.051, `x-height spread ${v} vs ${med}`);
   assert.ok(Math.abs(h('r') - h('n')) < 10);
 });
+
+test('recolorRange changes the blue face only and keeps the pink base', async () => {
+  const { recolorRange } = await import('../src/core/image.js');
+  // cyan, blue, magenta base, white highlight
+  const px = new Uint8ClampedArray([0, 230, 255, 255, 0, 100, 255, 255, 230, 40, 200, 255, 250, 250, 255, 255]);
+  recolorRange(px, { hue: 205, width: 38, soft: 30 }, [{ pos: 0.3, color: [255, 100, 0] }, { pos: 0.75, color: [255, 230, 50] }]);
+  assert.ok(px[0] > 200 && px[2] < 120, 'cyan became warm');
+  assert.ok(px[4] > 200 && px[6] < 120, 'blue became warm');
+  assert.ok(px[0] > px[4] - 1 && px[1] > px[5], 'brighter cyan maps to the lighter end');
+  assert.deepEqual([...px.slice(8, 11)], [230, 40, 200], 'magenta base untouched');
+  assert.deepEqual([...px.slice(12, 15)], [250, 250, 255], 'white highlight untouched');
+});

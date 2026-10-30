@@ -569,3 +569,36 @@ export function signatureDistance(a, b) {
   d /= a.sig.length;
   return d + Math.abs(Math.log(a.aspect / b.aspect)) * 0.25;
 }
+
+/**
+ * Recolour one colour range only (e.g. the blue letter face) and leave everything else (a pink 3D base,
+ * white highlights) untouched. Selected pixels take a colour from `stops` by their brightness, so shading is kept.
+ * range: { hue (deg), width (deg, half-width), soft (deg falloff), minSat (0..1) }
+ * stops: [{ pos 0..1 (perceived brightness), color [r,g,b] }]
+ */
+export function recolorRange(data, range, stops, amount = 1) {
+  const sorted = [...stops].sort((a, b) => a.pos - b.pos);
+  const lut = new Float32Array(256 * 3);
+  for (let v = 0; v < 256; v++) {
+    const t = v / 255;
+    let a = sorted[0], b = sorted[sorted.length - 1];
+    if (t <= a.pos) b = a; else if (t >= b.pos) a = b;
+    else for (let k = 0; k < sorted.length - 1; k++) if (t >= sorted[k].pos && t <= sorted[k + 1].pos) { a = sorted[k]; b = sorted[k + 1]; break; }
+    const f = b.pos === a.pos ? 0 : (t - a.pos) / (b.pos - a.pos);
+    for (let c = 0; c < 3; c++) lut[v * 3 + c] = a.color[c] + (b.color[c] - a.color[c]) * f;
+  }
+  const { hue, width = 40, soft = 25, minSat = 0.15 } = range;
+  for (let i = 0; i < data.length; i += 4) {
+    if (!data[i + 3]) continue;
+    const [h, s] = rgbToHsl(data[i], data[i + 1], data[i + 2]);
+    let d = Math.abs(h * 360 - hue); if (d > 180) d = 360 - d;
+    let w = d <= width ? 1 : d >= width + soft ? 0 : 1 - (d - width) / soft;
+    w *= Math.min(1, Math.max(0, (s - minSat) / 0.15));
+    if (w <= 0) continue;
+    w *= amount;
+    // key on perceived brightness, not HSL lightness: saturated cyan and blue share 50% lightness
+    const li = Math.round(Math.min(255, 0.2126 * data[i] + 0.7152 * data[i + 1] + 0.0722 * data[i + 2])) * 3;
+    for (let c = 0; c < 3; c++) data[i + c] = data[i + c] + (lut[li + c] - data[i + c]) * w;
+  }
+  return data;
+}

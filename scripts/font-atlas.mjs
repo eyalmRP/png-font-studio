@@ -1,6 +1,6 @@
 // The built-in fonts ship as a lossless WebP atlas plus a JSON description (assets/fonts/<key>.atlas.*), made from
 // the font zip by scripts/pack-atlas.py (Python with Pillow). The atlas records the zip's SHA-256 and is rebuilt when
-// the zip changes; encoding at full effort takes a few minutes, so the result is kept in the repository.
+// the zip changes; encoding at full effort takes about half a minute, so the result is kept in the repository.
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
@@ -20,7 +20,7 @@ export function ensureAtlas(key, { method = 6 } = {}) {
   let fresh = false;
   try { fresh = JSON.parse(fs.readFileSync(p.json, 'utf8')).source === hash && fs.existsSync(p.webp); } catch { /* missing */ }
   if (!fresh) {
-    console.log(`packing ${key} into a WebP atlas (a few minutes)…`);
+    console.log(`packing ${key} into a WebP atlas (about half a minute)…`);
     try {
       execFileSync('python3', [path.join(root, 'scripts/pack-atlas.py'), p.zip, p.webp, p.json, String(method)], { stdio: 'inherit' });
     } catch {

@@ -24,17 +24,20 @@ export async function imageToPNG(img) {
 }
 
 /** Decode any browser-readable image (Blob/File/bytes) to an RGBA image object (straight alpha). */
-export async function decodeImage(src) {
-  const blob = src instanceof Blob ? src : new Blob([src], { type: 'image/png' });
-  let bmp;
-  try { bmp = await createImageBitmap(blob, { premultiplyAlpha: 'none', colorSpaceConversion: 'none' }); }
+async function bitmapOf(blob) {
+  try { return await createImageBitmap(blob, { premultiplyAlpha: 'none', colorSpaceConversion: 'none' }); }
   catch {
-    bmp = await new Promise((resolve, reject) => {
+    return new Promise((resolve, reject) => {
       const im = new Image();
       im.onload = () => resolve(im); im.onerror = () => reject(new Error('Unsupported image'));
       im.src = URL.createObjectURL(blob);
     });
   }
+}
+
+export async function decodeImage(src) {
+  const blob = src instanceof Blob ? src : new Blob([src], { type: 'image/png' });
+  const bmp = await bitmapOf(blob);
   const c = document.createElement('canvas');
   c.width = bmp.width; c.height = bmp.height;
   const ctx = c.getContext('2d', { willReadFrequently: true });
@@ -79,6 +82,27 @@ export async function fontFromZipBytes(bytes, prefix = '', onProgress = null) {
     if (onProgress) onProgress(++n / todo.length);
   }));
   return fontFromJSON(json, images);
+}
+
+/**
+ * A font shipped as an atlas: meta = { font: font.json, atlas: { width, height, rects: { file: [x, y, w, h] } } },
+ * blob = the atlas image. The glyphs are cut out the same way decodeImage reads a single PNG.
+ */
+export async function fontFromAtlas(meta, blob, onProgress = null) {
+  const bmp = await bitmapOf(blob);
+  const c = document.createElement('canvas');
+  c.width = bmp.width; c.height = bmp.height;
+  const ctx = c.getContext('2d', { willReadFrequently: true });
+  ctx.drawImage(bmp, 0, 0);
+  const images = new Map();
+  const rects = Object.entries(meta.atlas.rects);
+  rects.forEach(([file, [x, y, w, h]], i) => {
+    const d = ctx.getImageData(x, y, w, h);
+    images.set(file, createImage(d.width, d.height, d.data));
+    if (onProgress) onProgress((i + 1) / rects.length);
+  });
+  c.width = c.height = 1; // let the big canvas go
+  return fontFromJSON(meta.font, images);
 }
 
 // ---------- projects ----------

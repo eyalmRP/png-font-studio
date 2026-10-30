@@ -1,9 +1,11 @@
 // Build: bundle the app with esbuild and write
-//   dist/artifact/index.html (+ fonts/*.zip)  — the claude.ai artifact (page content only; fonts beside it)
+//   dist/artifact/index.html (+ fonts/*.json, *.webp) — the claude.ai artifact (page content only; fonts beside it)
 //   dist/png-font-studio.html                 — a standalone single file with the fonts embedded
 import fs from 'node:fs';
 import path from 'node:path';
 import * as esbuild from 'esbuild';
+import crypto from 'node:crypto';
+import { ensureAtlas } from './font-atlas.mjs';
 
 const root = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
 const dist = path.join(root, 'dist');
@@ -12,18 +14,23 @@ const watch = process.argv.includes('--watch');
 async function build() {
   fs.rmSync(path.join(dist, 'artifact/fonts'), { recursive: true, force: true });
   fs.mkdirSync(path.join(dist, 'artifact/fonts'), { recursive: true });
-  // the page host serves .json but not .zip, so the font package ships as base64 inside JSON; the app is told
-  // each file's size so it can show download progress
-  const fontBytes = {};
+  // each built-in font ships as a lossless WebP atlas of its glyphs plus a JSON with the font and the glyph rects
+  // (the page host serves images and JSON, not zips)
+  const fontBytes = {}, embed = {};
   for (const k of ['bubble-blue']) {
-    const json = JSON.stringify({ zip: fs.readFileSync(path.join(root, 'assets/fonts', k + '.zip')).toString('base64') });
-    fs.writeFileSync(path.join(dist, 'artifact/fonts', k + '.json'), json);
-    fontBytes[k] = Buffer.byteLength(json);
+    const a = ensureAtlas(k);
+    const { font, atlas } = JSON.parse(fs.readFileSync(a.json, 'utf8'));
+    const webp = fs.readFileSync(a.webp);
+    fs.writeFileSync(path.join(dist, 'artifact/fonts', k + '.json'), JSON.stringify({ font, atlas }));
+    fs.writeFileSync(path.join(dist, 'artifact/fonts', k + '.webp'), webp);
+    // the size drives download progress; the content hash goes on the URLs so a cached older copy is never used
+    fontBytes[k] = { bytes: webp.length, v: crypto.createHash('sha256').update(webp).update(fs.readFileSync(a.json)).digest('hex').slice(0, 10) };
+    embed[k] = { meta: { font, atlas }, webp: webp.toString('base64') };
   }
   const res = await esbuild.build({
     entryPoints: [path.join(root, 'src/main.js')],
     bundle: true, format: 'iife', minify: true, write: false, target: ['chrome110', 'safari16', 'firefox115'],
-    legalComments: 'none', logLevel: 'warning', define: { __PFS_FONT_BYTES__: JSON.stringify(fontBytes) },
+    legalComments: 'none', logLevel: 'warning', define: { __PFS_FONT_FILES__: JSON.stringify(fontBytes) },
   });
   const js = res.outputFiles[0].text.replace(/<\/script/gi, '<\\/script');
   const css = fs.readFileSync(path.join(root, 'src/ui/styles.css'), 'utf8');
@@ -33,8 +40,6 @@ async function build() {
 <style>${css}</style>`;
   const bodyStart = '<div id="app"></div>';
   fs.writeFileSync(path.join(dist, 'artifact/index.html'), `${head}\n${bodyStart}\n<script>${js}</script>\n`);
-  const embed = {};
-  for (const k of ['bubble-blue']) embed[k] = fs.readFileSync(path.join(root, 'assets/fonts', k + '.zip')).toString('base64');
   const standalone = `<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 ${head}

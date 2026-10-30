@@ -5,6 +5,7 @@ import path from 'node:path';
 import { buildFromSheets, fontZip } from './font-from-sheets.mjs';
 import { shortenL, lFromH } from './glyph-fixups.mjs';
 import { normalizeSizes, autoMetrics } from '../src/core/font.js';
+import { ensureAtlas } from './font-atlas.mjs';
 
 const root = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
 const S = (n) => path.join(root, 'assets/sheets', n);
@@ -31,4 +32,6 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   fs.writeFileSync(out, fontZip(font));
   fs.rmSync(path.join(root, 'assets/fonts/bubble-orange.zip'), { force: true });
   console.log(`wrote ${path.relative(root, out)}: ${font.glyphs.size} glyphs`, font.metrics);
+  // the app downloads the font as a lossless WebP atlas
+  ensureAtlas('bubble-blue');
 }

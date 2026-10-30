@@ -5,7 +5,7 @@ import { h, storeGet, storeSet } from './ui/dom.js';
 import { faceVariant } from './core/recolor.js';
 import { state, addFont, createProject, projectFromJSON, newTextLayer, newEffect, emit, markLayer } from './app/store.js';
 import { mountApp, render, applyTheme } from './ui/app.js';
-import { fontFromZipBytes } from './storage/files.js';
+import { fontFromAtlas, fontFromZipBytes } from './storage/files.js';
 import { loadFontRecords, saveFontRecord, loadProjectRecord } from './storage/library.js';
 import { startAutosave } from './ui/projectio.js';
 import { on } from './app/store.js';
@@ -13,8 +13,8 @@ import { on } from './app/store.js';
 // Bump BUILTIN_VERSION when the built-in fonts change: a library from an older version gets them replaced.
 const BUILTIN_VERSION = 6;
 const BUILTIN = [
-  // the font package travels as base64 inside JSON: the claude.ai page host serves .json but not .zip
-  { id: 'builtin-bubble-blue', file: 'fonts/bubble-blue.json', key: 'bubble-blue', order: 0 },
+  // the font travels as fonts/<key>.json (description) + fonts/<key>.webp (glyph atlas): the page host serves those
+  { id: 'builtin-bubble-blue', key: 'bubble-blue', order: 0 },
   // colour variants are made from Bubble Blue when the app loads (one font file to download)
   { id: 'builtin-bubble-orange', from: 'builtin-bubble-blue', face: 'Orange', name: 'Bubble Orange', order: 1 },
   { id: 'builtin-bubble-pearl', from: 'builtin-bubble-blue', face: 'Pearl', name: 'Bubble Pearl', order: 2 },
@@ -27,18 +27,17 @@ function fromBase64(s) {
   return out;
 }
 
-// the build writes each font file's size here, for download progress when the server sends no length
-const FONT_BYTES = typeof __PFS_FONT_BYTES__ !== 'undefined' ? __PFS_FONT_BYTES__ : {};
+// the build writes each atlas file's size (for download progress when the server sends no length) and a content
+// hash (added to the URLs so a browser never mixes in a cached older copy)
+const FONT_FILES = typeof __PFS_FONT_FILES__ !== 'undefined' ? __PFS_FONT_FILES__ : {};
 
-/** The font package bytes; onProgress(0..1) follows the download. */
-async function builtinBytes(b, onProgress) {
-  const embedded = window.__PFS_FONTS__ && window.__PFS_FONTS__[b.key];
-  if (embedded) return fromBase64(embedded);
-  const res = await fetch(b.file);
-  if (!res.ok) throw new Error(`Could not load ${b.file}`);
+/** Download with progress (0..1); falls back to a plain read when the size is unknown. */
+async function download(url, size, onProgress) {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`Could not load ${url}`);
   // a compressed response's Content-Length counts compressed bytes, so prefer the size the build recorded
-  const total = FONT_BYTES[b.key] || Number(res.headers.get('content-length')) || 0;
-  if (!res.body || !total) return fromBase64((await res.json()).zip);
+  const total = size || Number(res.headers.get('content-length')) || 0;
+  if (!res.body || !total) return new Uint8Array(await res.arrayBuffer());
   const reader = res.body.getReader();
   const chunks = [];
   let got = 0;
@@ -51,7 +50,21 @@ async function builtinBytes(b, onProgress) {
   const all = new Uint8Array(got);
   let o = 0;
   for (const c of chunks) { all.set(c, o); o += c.length; }
-  return fromBase64(JSON.parse(new TextDecoder().decode(all)).zip);
+  return all;
+}
+
+/** A built-in font: its description and a lossless WebP atlas of the glyphs (embedded in the standalone file). */
+async function builtinFont(b, onDownload, onDecode) {
+  const embedded = window.__PFS_FONTS__ && window.__PFS_FONTS__[b.key];
+  let meta, bytes;
+  if (embedded) { meta = embedded.meta; bytes = fromBase64(embedded.webp); }
+  else {
+    const info = FONT_FILES[b.key] || {}, v = info.v ? `?v=${info.v}` : '';
+    meta = await (await fetch(`fonts/${b.key}.json${v}`)).json();
+    bytes = await download(`fonts/${b.key}.webp${v}`, info.bytes, onDownload);
+  }
+  onDownload(1);
+  return fontFromAtlas(meta, new Blob([bytes], { type: 'image/webp' }), onDecode);
 }
 
 const pause = () => new Promise((r) => setTimeout(r, 16)); // lets the loading screen repaint
@@ -82,10 +95,9 @@ export async function loadBuiltins({ save = true, progress = () => {} } = {}) {
       } else {
         const label = t('Downloading fonts…');
         progress(at, label);
-        const bytes = await builtinBytes(b, (x) => progress(at + x * plan.download, label));
-        at += plan.download;
-        f = await fontFromZipBytes(bytes, '', (x) => progress(at + x * plan.decode, t('Preparing letters…')));
-        at += plan.decode;
+        const start = at;
+        f = await builtinFont(b, (x) => progress(start + x * plan.download, label), (x) => progress(start + plan.download + x * plan.decode, t('Preparing letters…')));
+        at += plan.download + plan.decode;
       }
       f.id = b.id; f.builtin = true; f.order = b.order;
       byId.set(f.id, f);
@@ -181,4 +193,4 @@ boot();
 
 // test hook (used by the headless smoke test)
 import { exportAs } from './ui/export.js';
-window.__pfs = { state, exportAs };
+window.__pfs = { state, exportAs, fontFromAtlas, fontFromZipBytes };

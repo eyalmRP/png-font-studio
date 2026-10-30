@@ -69,24 +69,96 @@ const median = (arr) => {
   return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
 };
 
+// ---------- solid ink and edge shapes ----------
+
+const inkCache = new WeakMap();
+const SOLID = 128; // soft halos and anti-aliased fringes below this alpha are not counted as ink
+
+/**
+ * Solid ink of a glyph image: first and last rows (image px) and whether its top and bottom edges are round.
+ * An edge is flat when some part touching it keeps its width going inward (a stem foot, a crossbar); it is
+ * round when everything touching it narrows towards the edge (bowls, arches, rounded or pointed ends).
+ */
+export function glyphInk(g) {
+  const img = g && g.image;
+  if (!img) return null;
+  const hit = inkCache.get(img);
+  if (hit && hit.rev === g.rev) return hit;
+  const { width: W, height: H, data } = img;
+  const solidRow = (y) => { for (let x = 0; x < W; x++) if (data[(y * W + x) * 4 + 3] >= SOLID) return true; return false; };
+  let t = 0; while (t < H && !solidRow(t)) t++;
+  let b = H - 1; while (b > t && !solidRow(b)) b--;
+  if (t >= H) { t = 0; b = H - 1; }
+  const h = b - t + 1;
+  const d1 = Math.max(1, Math.round(h * 0.012)), d2 = Math.max(d1 + 2, Math.round(h * 0.07)), minW = Math.max(2, Math.round(h * 0.03));
+  const runs = (y) => {
+    const out = [];
+    let x0 = -1;
+    for (let x = 0; x <= W; x++) {
+      const on = x < W && data[(y * W + x) * 4 + 3] >= SOLID;
+      if (on && x0 < 0) x0 = x;
+      else if (!on && x0 >= 0) { out.push([x0, x - 1]); x0 = -1; }
+    }
+    return out;
+  };
+  const round = (edgeRow, dir) => {
+    const ya = edgeRow + dir * d1, yb = edgeRow + dir * d2;
+    if (ya < t || ya > b || yb < t || yb > b) return false;
+    const inner = runs(yb);
+    for (const [a0, a1] of runs(ya)) {
+      const wa = a1 - a0 + 1;
+      if (wa < minW) continue;
+      let wb = 0;
+      for (const [b0, b1] of inner) if (b1 >= a0 && b0 <= a1) wb += b1 - b0 + 1;
+      if (wb && wa / wb >= 0.6) return false;
+    }
+    return true;
+  };
+  const res = { rev: g.rev, t, b, h, top: round(t, 1), bottom: round(b, -1) };
+  inkCache.set(img, res);
+  return res;
+}
+
+/** Height of the solid ink in font units. */
+export function inkHeight(g) { const k = glyphInk(g); return k ? k.h * g.scale : 0; }
+/** Top of the solid ink above the baseline (font units). */
+export function inkTop(g) { const k = glyphInk(g); return k ? (g.baseline - k.t) * g.scale : 0; }
+/** Bottom of the solid ink below the baseline (font units; positive = below). */
+export function inkBottom(g) { const k = glyphInk(g); return k ? (k.b + 1 - g.baseline) * g.scale : 0; }
+
+/**
+ * Which sides of a glyph overshoot its guide lines: 'both' | 'top' | 'bottom' | null. A manual setting wins;
+ * otherwise the artwork decides. Only glyphs that stand on the guide lines overshoot: maths, brackets, quotes
+ * and dashes are centred or hang, and descenders end below the baseline, not on it.
+ */
+export function glyphRound(g) {
+  if (g.round && g.round !== 'auto') return g.round === 'none' ? null : g.round;
+  const cat = charCategory(g.char);
+  if (cat !== 'base' && cat !== 'desc' && cat !== 'base-desc') return null;
+  const k = glyphInk(g);
+  if (!k) return roundSides(g.char);
+  const top = k.top, bottom = k.bottom && cat === 'base';
+  return top && bottom ? 'both' : top ? 'top' : bottom ? 'bottom' : null;
+}
+
 /** Measure cap height and x-height from flat reference glyphs, and the overshoot of round capitals. */
 export function measureFont(font) {
-  const h = (ch) => { const g = font.glyphs.get(ch); return g && g.image ? g.image.height * g.scale : null; };
-  const pick = (refs) => refs.map(h).filter((v) => v);
-  let capHeight = median(pick(CAP_REF));
-  let xHeight = median(pick(X_REF));
+  // heights are solid ink: the soft halo around AI-made artwork would otherwise lift every glyph
+  const h = (ch) => { const g = font.glyphs.get(ch); return g && g.image ? inkHeight(g) : null; };
+  const flat = (refs) => refs.map((c) => font.glyphs.get(c)).filter((g) => g && g.image && !glyphRound(g)).map(inkHeight);
+  let capHeight = median(flat(CAP_REF)) || median(CAP_REF.map(h).filter((v) => v));
+  let xHeight = median(flat(X_REF)) || median(X_REF.map(h).filter((v) => v));
   const xs = [...'acemnorsuvwxz'].map((c) => font.glyphs.get(c)).filter((g) => g && g.image);
   if (xs.length >= 5) {
     // optical x-height: round letters count without their overshoot
-    const capGuess = median(pick(CAP_REF)) || 1;
-    const osGuess = capGuess * 0.015;
-    xHeight = median(xs.map((g) => { const sd = roundSides(g.char, g.round); return g.image.height * g.scale - (sd === 'both' ? 2 : sd ? 1 : 0) * osGuess; }));
+    const osGuess = (capHeight || 1) * 0.015;
+    xHeight = median(xs.map((g) => { const sd = glyphRound(g); return inkHeight(g) - (sd === 'both' ? 2 : sd ? 1 : 0) * osGuess; }));
   }
-  const all = [...font.glyphs.values()].filter((g) => g.image && charCategory(g.char) === 'base').map((g) => g.image.height * g.scale);
+  const all = [...font.glyphs.values()].filter((g) => g.image && charCategory(g.char) === 'base').map(inkHeight);
   if (!capHeight) capHeight = median(all) || 160;
   if (!xHeight) xHeight = Math.round(capHeight * 0.72);
   // overshoot per side, measured on round capitals against the flat cap height
-  const rounds = pick([...'OCGQS']).map((v) => (v - capHeight) / 2).filter((v) => v > 0);
+  const rounds = [...'OCGQS'].map((c) => font.glyphs.get(c)).filter((g) => g && g.image && glyphRound(g) === 'both').map((g) => (inkHeight(g) - capHeight) / 2).filter((v) => v > 0);
   let overshoot = median(rounds);
   if (overshoot === null) overshoot = capHeight * 0.015;
   overshoot = Math.min(capHeight * 0.035, Math.max(capHeight * 0.008, overshoot));
@@ -120,22 +192,21 @@ export function normalizeSizes(font, { tolerance = 0.035, groups = SIZE_GROUPS, 
     const osCap = font.metrics.overshoot ?? font.metrics.capHeight * 0.015;
     const extra = (g, flatGuess) => {
       if (grp.id === 'descender') return 0;
-      const side = roundSides(g.char, g.round);
+      const side = glyphRound(g);
       const o = osCap * (flatGuess / Math.max(1, font.metrics.capHeight || flatGuess));
       return side === 'both' ? 2 * o : side ? o : 0;
     };
-    const rough = median(gs.map((g) => g.image.height * g.scale));
-    const flatH = median(gs.map((g) => g.image.height * g.scale - extra(g, rough)));
+    const rough = median(gs.map(inkHeight));
+    const flatH = median(gs.map((g) => inkHeight(g) - extra(g, rough)));
     const os = groupOvershoot(font, flatH);
     for (const g of gs) {
-      const side = roundSides(g.char, g.round);
+      const side = glyphRound(g);
       // descenders keep their own length; only round tops count for them
       const target = grp.id === 'descender' ? flatH : flatH + (side === 'both' ? 2 * os : side ? os : 0);
-      void side;
-      const hgt = g.image.height * g.scale;
+      const hgt = inkHeight(g);
       if (Math.abs(hgt / target - 1) > tolerance) {
         const from = g.scale;
-        g.scale = +(target / g.image.height).toFixed(4);
+        g.scale = +(target / glyphInk(g).h).toFixed(4);
         g.autoScale = true;
         g.rev++;
         changes.push({ char: g.char, from, to: g.scale });
@@ -152,7 +223,7 @@ export function autoMetrics(font, { force = false } = {}) {
   if (font.metrics.overshootAuto !== false) font.metrics.overshoot = overshoot;
   const os = font.metrics.overshoot ?? overshoot;
   const G = (ch) => font.glyphs.get(ch);
-  const H = (ch) => { const g = G(ch); return g && g.image ? g.image.height * g.scale : null; };
+  const H = (ch) => { const g = G(ch); return g && g.image ? inkHeight(g) : null; };
   const mathAxis = xHeight * 0.5;
   const digitFlat = median([...'1247'].map(H).filter((v) => v)) || capHeight;
   const flatFor = (ch) => {
@@ -163,8 +234,9 @@ export function autoMetrics(font, { force = false } = {}) {
   };
   for (const g of font.glyphs.values()) {
     if (!g.image || (!g.autoBaseline && !force)) continue;
-    const h = g.image.height * g.scale;
-    const side = roundSides(g.char, g.round);
+    const ink = glyphInk(g);
+    const h = ink.h * g.scale;
+    const side = glyphRound(g);
     const flatH = flatFor(g.char);
     const osG = flatH ? os * (flatH / capHeight) : os;
     // how far a round glyph dips below the baseline
@@ -174,7 +246,7 @@ export function autoMetrics(font, { force = false } = {}) {
       if (side === 'both') below = Math.min(excess / 2, osG * 2);
       else if (side === 'bottom') below = Math.min(excess, osG * 2);
     } else if (side === 'bottom' || side === 'both') below = Math.min(osG, h * 0.05);
-    let top; // font units above the baseline of the image top
+    let top; // font units above the baseline of the top of the solid ink
     switch (charCategory(g.char)) {
       case 'desc': top = xHeight + (side === 'top' || side === 'both' ? os * (xHeight / capHeight) : 0); break;
       case 'j': top = H('i') || xHeight * 1.3; break;
@@ -187,12 +259,12 @@ export function autoMetrics(font, { force = false } = {}) {
       case 'base-desc': top = Math.min(h, capHeight); break;
       default: top = h - below;
     }
-    g.baseline = top / g.scale;
+    g.baseline = ink.t + top / g.scale;
     if (force) g.autoBaseline = true;
   }
   if (font.metrics.auto || force) {
-    const asc = ASC_REF.map((c) => G(c)).filter((g) => g && g.image).map(glyphTop);
-    const desc = DESC_REF.map((c) => G(c)).filter((g) => g && g.image).map(glyphBottom);
+    const asc = ASC_REF.map((c) => G(c)).filter((g) => g && g.image).map(inkTop);
+    const desc = DESC_REF.map((c) => G(c)).filter((g) => g && g.image).map(inkBottom);
     font.metrics.capHeight = capHeight;
     font.metrics.xHeight = xHeight;
     font.metrics.ascender = Math.round(Math.max(capHeight, median(asc) || capHeight));

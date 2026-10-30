@@ -116,10 +116,10 @@ export const SIZE_GROUPS = [
 const ROUND = new Map();
 const round = (side, chars) => { for (const c of chars) ROUND.set(c, side); };
 round('both', 'CGOQS' + 'oces' + 'a' + '03689' + '@©®' + 'סםעט');
-round('top', 'nmhr2' + 'gpq' + 'f');
+round('top', 'nmr2' + 'gpq' + 'f');
 round('bottom', 'JUu5bdt' + 'ו');
 
-/** Which sides of a character overshoot: 'both' | 'top' | 'bottom' | null. glyph.round overrides when set. */
+/** Typical overshoot sides of a character, for glyphs without artwork to measure (glyphRound measures it). */
 export function roundSides(ch, override) {
   if (override !== undefined && override !== null && override !== 'auto') return override === 'none' ? null : override;
   return ROUND.get(ch) || null;

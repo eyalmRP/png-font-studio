@@ -11,7 +11,7 @@ import { startAutosave } from './ui/projectio.js';
 import { on } from './app/store.js';
 
 // Bump BUILTIN_VERSION when the built-in fonts change: a library from an older version gets them replaced.
-const BUILTIN_VERSION = 2;
+const BUILTIN_VERSION = 3;
 const BUILTIN = [
   { id: 'builtin-bubble-blue', file: 'fonts/bubble-blue.zip', key: 'bubble-blue', order: 0 },
   // colour variants are made from Bubble Blue when the app loads (one font file to download)

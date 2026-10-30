@@ -1,4 +1,4 @@
-// Build the built-in Bubble Blue font from the six prompt sheets with the same core the app's importer uses.
+// Build the built-in Bubble Blue font from the prompt sheets with the same core the app's importer uses.
 // Bubble Orange and Bubble Pearl are made from it in the app (src/main.js), so only one font file ships.
 import fs from 'node:fs';
 import path from 'node:path';
@@ -12,9 +12,8 @@ export const BUBBLE_SHEETS = [
   ['prompt-3', S('bubble-3-digits-punctuation.png')],
   ['prompt-4', S('bubble-4-brackets-signs.png')],
   ['prompt-5', S('bubble-5-currency-maths.png')],
-  ['prompt-6', S('bubble-6-more-maths.png')],
-  // the first lowercase take drew l with a foot, so it read as L: use the plain l from the second take
-  ['prompt-2', S('bubble-2b-lowercase-alt.png'), 'l'],
+  // redraws: the first maths sheet came out thin, and the lowercase take drew l with a foot (it read as L)
+  ['prompt-7', S('bubble-7-fixes.png')],
 ];
 
 if (import.meta.url === `file://${process.argv[1]}`) {

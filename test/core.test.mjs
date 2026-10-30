@@ -196,3 +196,27 @@ test('half-transparent tinted grid lines are found and kept off the glyphs', asy
   assert.equal(cells[0].image.width, 62, 'line fragments do not stretch the glyph');
   assert.ok(cells[1].empty, 'nothing but line in the second cell');
 });
+
+test('overshoot is measured from the artwork: round and pointed edges overshoot, flat edges do not', async () => {
+  const { createImage } = await import('../src/core/image.js');
+  const { createGlyph, glyphRound, glyphInk } = await import('../src/core/font.js');
+  const draw = (w, h, inside) => {
+    const img = createImage(w, h + 6);
+    for (let y = 0; y < h + 6; y++) for (let x = 0; x < w; x++) {
+      // a soft 3px halo above and below the solid shape must not count as ink
+      const a = y < 3 || y >= h + 3 ? 40 : inside(x, y - 3) ? 255 : 0;
+      img.data.set([40, 160, 255, a], (y * w + x) * 4);
+    }
+    return img;
+  };
+  const r = 50;
+  const disc = createGlyph('o', draw(2 * r, 2 * r, (x, y) => (x - r + 0.5) ** 2 + (y - r + 0.5) ** 2 <= r * r));
+  const bar = createGlyph('H', draw(80, 100, () => true));
+  const arch = createGlyph('n', draw(100, 100, (x, y) => y >= 50 || (x - 49.5) ** 2 + (y - 50) ** 2 <= 50 * 50));
+  assert.equal(glyphRound(disc), 'both');
+  assert.equal(glyphRound(bar), null);
+  assert.equal(glyphRound(arch), 'top');
+  assert.deepEqual([glyphInk(bar).t, glyphInk(bar).b], [3, 102], 'halo rows are not ink');
+  disc.round = 'none';
+  assert.equal(glyphRound(disc), null, 'a manual setting wins');
+});

@@ -6,7 +6,7 @@ import {
 } from '../controls.js';
 import { state, on, emit, addFont, removeFont, currentFont, fontChanged, checkpoint, setUI } from '../../app/store.js';
 import {
-  createFont, setGlyph, remapGlyph, duplicateGlyph, autoMetrics, normalizeSizes, sortedChars, cloneFont, glyphAdvance, opticalKern, touch,
+  createFont, setGlyph, remapGlyph, duplicateGlyph, autoMetrics, normalizeSizes, sortedChars, cloneFont, glyphAdvance, opticalKern, touch, glyphRound,
 } from '../../core/font.js';
 import { charLabel, CHARSET_GROUPS } from '../../core/charsets.js';
 import { flipImage, rotate90, trimImage, cleanupAlpha, adjustHsl, gradientMap, cloneImage, recolorRange } from '../../core/image.js';
@@ -429,7 +429,8 @@ export function mountFonts({ left, right, center, exportSlot }) {
       scale: numberField({ label: t('Scale'), iconName: 'zoomIn', min: 5, max: 1000, step: 1, unit: '%', onInput: (v) => edit('Scale', (x) => { const top = x.baseline * x.scale; x.scale = v / 100; x.autoScale = false; x.baseline = top / x.scale; }, 'gs'), onChange: () => {} }),
     };
     const autoT = toggle({ label: t('Place automatically'), iconName: 'wand', value: g.autoBaseline, onChange: (v) => { edit('Auto place', (x) => { x.autoBaseline = v; }); if (v) { autoMetrics(font); afterFontEdit(font); } } });
-    const roundSel = select({ label: t('Overshoot'), iconName: 'dot', value: g.round || 'auto', options: [{ value: 'auto', label: t('Automatic') }, { value: 'none', label: t('Flat (none)') }, { value: 'both', label: t('Round top and bottom') }, { value: 'top', label: t('Round top') }, { value: 'bottom', label: t('Round bottom') }], onChange: (v) => { edit('Overshoot', (x) => { x.round = v === 'auto' ? null : v; }); autoMetrics(font); afterFontEdit(font); } });
+    const detected = { both: 'round top and bottom', top: 'round top', bottom: 'round bottom' }[glyphRound({ ...g, round: null })] || 'flat';
+    const roundSel = select({ label: t('Overshoot'), iconName: 'dot', value: g.round || 'auto', options: [{ value: 'auto', label: `${t('Automatic')} (${t(detected)})` }, { value: 'none', label: t('Flat (none)') }, { value: 'both', label: t('Round top and bottom') }, { value: 'top', label: t('Round top') }, { value: 'bottom', label: t('Round bottom') }], onChange: (v) => { edit('Overshoot', (x) => { x.round = v === 'auto' ? null : v; }); autoMetrics(font); afterFontEdit(font); } });
     function syncFields() {
       const gg = font.glyphs.get(ch);
       if (!gg) return;

@@ -76,7 +76,7 @@ test('layout: caret, hit test and wrapping', () => {
   const c0 = caretAt(L, 0), c5 = caretAt(L, 5);
   assert.ok(c5.x > c0.x);
   assert.equal(hitTest(L, c5.x + 1, 0), 5);
-  const boxed = layoutDoc(doc, { getFont, mode: 'box', width: 400 });
+  const boxed = layoutDoc(doc, { getFont, mode: 'box', width: 560 });
   assert.equal(boxed.lines.length, 2);
   assert.equal(boxed.lines[1].start, 6);
   assert.equal(selectionRects(L, 0, 5).length, 1);

@@ -12,8 +12,8 @@ import { CHARSET_GROUPS } from '../../core/charsets.js';
 import { glyphFrame, placeGlyph, alphaBox, inkBearings, frameName, parseFrameName, layerChar, sheetCells, sheetName, parseSheetName, SHEET_PAD } from '../../core/glyphframe.js';
 import { setGlyph, touch, cloneFont } from '../../core/font.js';
 import { createImage } from '../../core/image.js';
-import { zipSync, unzip } from '../../core/zip.js';
-import { inflateRaw, saveFile, safeName } from '../../storage/files.js';
+import { zipDeflate, unzip } from '../../core/zip.js';
+import { inflateRaw, deflateRaw, saveFile, safeName } from '../../storage/files.js';
 
 // the build names the ag-psd script file (it carries a content hash)
 const PSD_FILE = typeof __PFS_PSD_FILE__ !== 'undefined' ? __PFS_PSD_FILE__ : 'psd.js';
@@ -82,7 +82,8 @@ export async function exportFontPSD(font, layout = 'stack') {
   const bytes = new Uint8Array(lib.writePsd(psd, { generateThumbnail: false }));
   const base = safeName(font.name, 'font');
   const file = layout === 'sheet' ? `${base} sheet` : base;
-  const zip = zipSync([{ name: `${file}.psd`, data: bytes }, { name: 'How to edit in Photoshop.txt', data: layout === 'sheet' ? sheetHowTo(file) : howTo(file) }]);
+  // PSD pixel data is mostly runs of transparency, so deflating shrinks the download a lot
+  const zip = await zipDeflate([{ name: `${file}.psd`, data: bytes }, { name: 'How to edit in Photoshop.txt', data: layout === 'sheet' ? sheetHowTo(file) : howTo(file) }], deflateRaw);
   return saveFile(`${file} for Photoshop.zip`, new Blob([zip], { type: 'application/zip' }));
 }
 

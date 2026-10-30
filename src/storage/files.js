@@ -55,6 +55,14 @@ export async function inflateRaw(bytes) {
   return new Uint8Array(out);
 }
 
+/** Raw deflate with the browser's compressor; null where it has none (the zip then stores the file). */
+export async function deflateRaw(bytes) {
+  if (typeof CompressionStream === 'undefined') return null;
+  let cs;
+  try { cs = new CompressionStream('deflate-raw'); } catch { return null; }
+  return new Uint8Array(await new Response(new Blob([bytes]).stream().pipeThrough(cs)).arrayBuffer());
+}
+
 // ---------- font packages ----------
 
 export async function fontToZip(font) {

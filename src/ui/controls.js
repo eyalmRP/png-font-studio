@@ -27,6 +27,12 @@ export function evalExpr(str) {
 
 function roundTo(v, decimals) { const f = 10 ** decimals; return Math.round(v * f) / f; }
 
+/** Sliders paint their filled part from --fill: WebKit has no pseudo-element for it. */
+export function rangeFill(r) {
+  const min = +r.min || 0, max = +r.max || 100;
+  r.style.setProperty('--fill', `${((+r.value - min) / (max - min || 1)) * 100}%`);
+}
+
 /**
  * Number field: drag on the label or the field to scrub, ▲▼ buttons, arrow keys, wheel when focused,
  * typed maths, optional slider. onInput fires live, onChange on commit (pointer up / enter / blur).
@@ -50,7 +56,7 @@ export function numberField(o) {
   const render = () => {
     if (document.activeElement !== input) input.value = fmt(value);
     input.placeholder = value === undefined ? '—' : '';
-    if (range && value !== undefined) range.value = clamp(value, sMin, sMax);
+    if (range && value !== undefined) { range.value = clamp(value, sMin, sMax); rangeFill(range); }
     el.classList.toggle('mixed', value === undefined);
   };
   const setLive = (v, commit) => {
@@ -352,11 +358,14 @@ export function gradientField(o) {
 // ---------- overlays ----------
 
 let toastHost;
-export function toast(msg, kind = 'info', ms = 3200) {
+/** A short message at the bottom; action: { label, onClick } adds a button (the toast then stays a little longer). */
+export function toast(msg, kind = 'info', ms = 3200, action = null) {
   if (!toastHost) { toastHost = h('div.toasts', { role: 'status', 'aria-live': 'polite' }); document.body.appendChild(toastHost); }
-  const el = h('div.toast', { class: 'toast-' + kind }, icon(kind === 'error' ? 'alert' : kind === 'ok' ? 'check' : 'info', 16), h('span', msg));
+  const close = () => { el.classList.add('out'); setTimeout(() => el.remove(), 300); };
+  const btn = action ? h('button.toast-action', { type: 'button', on: { click: () => { close(); action.onClick(); } } }, action.label) : null;
+  const el = h('div.toast', { class: 'toast-' + kind }, icon(kind === 'error' ? 'alert' : kind === 'ok' ? 'check' : 'info', 16), h('span', msg), btn);
   toastHost.appendChild(el);
-  setTimeout(() => { el.classList.add('out'); setTimeout(() => el.remove(), 300); }, ms);
+  setTimeout(close, action ? Math.max(ms, 6000) : ms);
 }
 
 /** Modal dialog. Returns { el, close }. */

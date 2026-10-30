@@ -1,4 +1,4 @@
-// Minimal ZIP writer (stored entries) and reader (stored + deflate via an injected inflater).
+// Minimal ZIP writer (stored, or deflated via an injected deflater) and reader (stored + deflate via an injected inflater).
 
 const CRC_TABLE = (() => {
   const t = new Uint32Array(256);
@@ -19,8 +19,27 @@ export function crc32(bytes, crc = 0) {
 const enc = new TextEncoder();
 const dec = new TextDecoder();
 
-/** entries: [{ name, data: Uint8Array | string }] → Uint8Array of a .zip */
+/** entries: [{ name, data: Uint8Array | string }] → Uint8Array of a .zip, every entry stored */
 export function zipSync(entries) {
+  return build(entries.map((e) => { const data = typeof e.data === 'string' ? enc.encode(e.data) : e.data; return { name: e.name, data, packed: data, method: 0 }; }));
+}
+
+/**
+ * Like zipSync, but each entry deflated by deflateRaw(bytes) → Promise<Uint8Array | null> (raw deflate, no header).
+ * An entry stays stored when the deflater is missing or the result is not smaller.
+ */
+export async function zipDeflate(entries, deflateRaw) {
+  const out = [];
+  for (const e of entries) {
+    const data = typeof e.data === 'string' ? enc.encode(e.data) : e.data;
+    let packed = null;
+    try { packed = deflateRaw ? await deflateRaw(data) : null; } catch { packed = null; }
+    out.push(packed && packed.length < data.length ? { name: e.name, data, packed, method: 8 } : { name: e.name, data, packed: data, method: 0 });
+  }
+  return build(out);
+}
+
+function build(entries) {
   const parts = [];
   const central = [];
   let offset = 0;
@@ -29,36 +48,36 @@ export function zipSync(entries) {
   const dosDate = ((now.getFullYear() - 1980) << 9) | ((now.getMonth() + 1) << 5) | now.getDate();
   for (const e of entries) {
     const name = enc.encode(e.name);
-    const data = typeof e.data === 'string' ? enc.encode(e.data) : e.data;
+    const { data, packed, method } = e;
     const crc = crc32(data);
     const local = new DataView(new ArrayBuffer(30));
     local.setUint32(0, 0x04034b50, true);
     local.setUint16(4, 20, true);
     local.setUint16(6, 0x0800, true); // UTF-8 names
-    local.setUint16(8, 0, true);
+    local.setUint16(8, method, true);
     local.setUint16(10, dosTime, true);
     local.setUint16(12, dosDate, true);
     local.setUint32(14, crc, true);
-    local.setUint32(18, data.length, true);
+    local.setUint32(18, packed.length, true);
     local.setUint32(22, data.length, true);
     local.setUint16(26, name.length, true);
     local.setUint16(28, 0, true);
-    parts.push(new Uint8Array(local.buffer), name, data);
+    parts.push(new Uint8Array(local.buffer), name, packed);
     const cd = new DataView(new ArrayBuffer(46));
     cd.setUint32(0, 0x02014b50, true);
     cd.setUint16(4, 20, true);
     cd.setUint16(6, 20, true);
     cd.setUint16(8, 0x0800, true);
-    cd.setUint16(10, 0, true);
+    cd.setUint16(10, method, true);
     cd.setUint16(12, dosTime, true);
     cd.setUint16(14, dosDate, true);
     cd.setUint32(16, crc, true);
-    cd.setUint32(20, data.length, true);
+    cd.setUint32(20, packed.length, true);
     cd.setUint32(24, data.length, true);
     cd.setUint16(28, name.length, true);
     cd.setUint32(42, offset, true);
     central.push(new Uint8Array(cd.buffer), name);
-    offset += 30 + name.length + data.length;
+    offset += 30 + name.length + packed.length;
   }
   const cdSize = central.reduce((s, p) => s + p.length, 0);
   const end = new DataView(new ArrayBuffer(22));

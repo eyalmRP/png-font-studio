@@ -294,3 +294,15 @@ test('Photoshop sheet: each group starts a row, and the sheet numbers survive a 
   assert.deepEqual(parseSheetName(sheetName(frame, 13)), { ...frame, cols: 13 });
   assert.equal(parseSheetName('PNG Font Studio frame · p=1'), null);
 });
+
+test('zipDeflate: deflated entries read back the same, and a file that does not shrink stays stored', async () => {
+  const { zipDeflate } = await import('../src/core/zip.js');
+  const big = new Uint8Array(200000); for (let i = 0; i < big.length; i += 97) big[i] = i & 255;
+  const noise = new Uint8Array(4000); for (let i = 0; i < noise.length; i++) noise[i] = (i * 2654435761) >>> 24;
+  const z = await zipDeflate([{ name: 'a.bin', data: big }, { name: 'n.bin', data: noise }, { name: 'r.txt', data: 'héllo' }], async (b) => new Uint8Array(zlib.deflateRawSync(b)));
+  assert.ok(z.length < 20000, `zip is ${z.length} bytes`);
+  const files = await unzip(z, async (b) => new Uint8Array(zlib.inflateRawSync(b)));
+  assert.deepEqual(files.get('a.bin'), big);
+  assert.deepEqual(files.get('n.bin'), noise);
+  assert.equal(textOf(files.get('r.txt')), 'héllo');
+});

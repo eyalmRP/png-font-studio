@@ -9,6 +9,7 @@ import { createPlayer } from './player.js';
 import { renderLayer } from '../../render/layer.js';
 import { openExport } from '../export.js';
 import { openProject, saveProject } from '../projectio.js';
+import { undoToast } from '../undotoast.js';
 
 const SIZES = [
   { id: '1920x1080', label: 'Full HD 16:9', w: 1920, h: 1080 },
@@ -147,6 +148,7 @@ export function mountTitles({ left, right, center, exportSlot, sizes, applySizes
     state.project.layers = state.project.layers.filter((x) => x !== l);
     selectLayer(null);
     projectChanged();
+    undoToast(t('Deleted {name}', { name: l.name || t('Text') }));
   }
   function newTitle() {
     checkpoint('project', 'New title');
@@ -155,6 +157,7 @@ export function mountTitles({ left, right, center, exportSlot, sizes, applySizes
     state.selectedLayerId = null;
     projectChanged();
     emit('selection');
+    undoToast(t('Started a new title'));
   }
 
   // ---------- still / animated ----------

@@ -9,7 +9,7 @@ import {
   Italic, Film, FileImage, FileArchive, Info, TriangleAlert, Square, SquareDashed, TextCursorInput, MousePointer2,
   Hand, ScanText, Blend, Droplet, Sun as SunIcon, CircleDot, Spline, Box, Fingerprint, Shuffle, ListOrdered,
   IndentIncrease, IndentDecrease, ArrowDownToLine, ArrowUpToLine, PanelLeft, PanelRight, PanelBottom, Keyboard,
-  GripVertical, Link2, Unlink2, Heart, Zap, Briefcase, Smile, PartyPopper, Timer, Hash, CaseUpper, CaseLower,
+  GripVertical, Link2, Unlink2, Heart, CircleHelp, Zap, Briefcase, Smile, PartyPopper, Timer, Hash, CaseUpper, CaseLower,
   WrapText, LetterText, Combine, Scissors, Pipette, Contrast, Paintbrush, Layers2, LayoutGrid, Cloud,
 } from 'lucide';
 
@@ -30,7 +30,7 @@ export const ICONS = {
   scanText: ScanText, blend: Blend, droplet: Droplet, glow: SunIcon, dot: CircleDot, spline: Spline, box: Box,
   fingerprint: Fingerprint, shuffle: Shuffle, list: ListOrdered, indentInc: IndentIncrease, indentDec: IndentDecrease,
   spaceAfter: ArrowDownToLine, spaceBefore: ArrowUpToLine, panelLeft: PanelLeft, panelRight: PanelRight,
-  panelBottom: PanelBottom, keyboard: Keyboard, grip: GripVertical, link: Link2, unlink: Unlink2, heart: Heart,
+  panelBottom: PanelBottom, keyboard: Keyboard, help: CircleHelp, grip: GripVertical, link: Link2, unlink: Unlink2, heart: Heart,
   zap: Zap, briefcase: Briefcase, smile: Smile, party: PartyPopper, timer: Timer, hash: Hash, caseUpper: CaseUpper,
   caseLower: CaseLower, wrap: WrapText, letters: LetterText, combine: Combine, scissors: Scissors, pipette: Pipette,
   contrast: Contrast, brush: Paintbrush, layers2: Layers2, layout: LayoutGrid, cloud: Cloud,

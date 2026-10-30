@@ -3,12 +3,13 @@ import { h, clear, icon, storeSet } from '../dom.js';
 import { t } from '../i18n.js';
 import { numberField, angleField, pills, toggle, section, tabs, select, button, iconButton, colorField, gradientField, menu } from '../controls.js';
 import { state, on, emit, selectedLayer, checkpoint, projectChanged, newEffect, getFont } from '../../app/store.js';
-import { currentCharStyle, currentParaStyle, setChar, setPara, isCollapsedEdit, setLayerText, enterEdit } from '../../app/textedit.js';
+import { currentCharStyle, currentParaStyle, setChar, setPara, kernIndex, setPairKern, setLayerText, enterEdit } from '../../app/textedit.js';
 import { EFFECTS, EFFECT_ORDER, BLEND_MODES, STYLE_PRESETS } from '../../core/effects-def.js';
 import { WARP_STYLES, warpPoint, DEFAULT_WARP } from '../../core/warp.js';
 import { IN_PRESETS, OUT_PRESETS, LOOP_PRESETS, ORDERS, DEFAULT_ANIM } from '../../core/anim.js';
 import { DEFAULT_CHAR, DEFAULT_PARA } from '../../core/textdoc.js';
 import { drawSample } from '../sample.js';
+import { undoToast } from '../undotoast.js';
 
 export const LABELS = {
   // effects
@@ -67,13 +68,14 @@ export function createInspector() {
   };
   syncTabs();
   let refreshers = [];
-  let builtFor = null;
+  let builtFor = null, builtLayer = null;
   const reg = (fn) => { refreshers.push(fn); fn(); };
 
   function build() {
     clear(body);
     refreshers = [];
     const layer = selectedLayer();
+    builtLayer = layer;
     builtFor = layer ? layer.id + ':' + state.ui.rightTab + ':' + (layer.effects?.map((e) => e.id + e.type + (e.fill || '') + (e.mode || '') + (e.kind || '') + e.position).join(',')) + ':' + layer.warp.style : null;
     if (!layer) {
       body.appendChild(h('div.empty', icon('type', 28), h('p', t('Select a title on the stage, or press T and click the artboard to add one.'))));
@@ -91,6 +93,8 @@ export function createInspector() {
     const layer = selectedLayer();
     const key = layer ? layer.id + ':' + state.ui.rightTab + ':' + (layer.effects?.map((e) => e.id + e.type + (e.fill || '') + (e.mode || '') + (e.kind || '') + e.position).join(',')) + ':' + layer.warp.style : null;
     if (key !== builtFor) { build(); return; }
+    // undo and redo bring back a copy of the title: the controls must read from the copy, so build them again in place
+    if (layer !== builtLayer) { const y = body.scrollTop; build(); body.scrollTop = y; return; }
     for (const r of refreshers) r();
   }
 
@@ -139,9 +143,11 @@ export function createInspector() {
       onChange: (v) => setChar({ kerning: v }),
     });
     reg(() => kernPills.setValue(cs().kerning));
-    const kernField = nf('kern', { label: t('Pair kern'), iconName: 'arrowsH', min: -1000, max: 1000, step: 5, unit: '‰', title: t('Kerning before the character after the caret (1/1000 em)') });
-    reg(() => { kernField.style.display = isCollapsedEdit(layer) ? '' : 'none'; });
-    body.appendChild(section({ id: 'ch-size', title: t('Size & spacing'), iconName: 'caseSensitive', onReset: resetChar(['tracking', 'kerning', 'kern', 'baselineShift']) },
+    // the pair at the caret: the same letter Alt+←/→ changes
+    const kernField = numberField({ label: t('Pair kern'), iconName: 'arrowsH', def: 0, min: -1000, max: 1000, step: 5, unit: '‰', title: t('Kerning before the character after the caret (1/1000 em) · Alt+←/→'),
+      onInput: (v) => setPairKern(v, 'kern:' + layer.id + ':' + kernIndex(layer)), onChange: (v) => setPairKern(v, 'kern:' + layer.id + ':' + kernIndex(layer)) });
+    reg(() => { const i = kernIndex(layer); kernField.style.display = i < 0 ? 'none' : ''; if (i >= 0) kernField.setValue(layer.doc.styles[i].kern || 0); });
+    body.appendChild(section({ id: 'ch-size', title: t('Size & spacing'), iconName: 'caseSensitive', onReset: () => { if (kernIndex(layer) >= 0) setPairKern(0); resetChar(['tracking', 'kerning', 'kern', 'baselineShift'])(); } },
       nf('size', { label: t('Size'), iconName: 'caseSensitive', min: 2, max: 3000, step: 1, unit: 'px', slider: true, sliderMin: 8, sliderMax: 600 }),
       nf('tracking', { label: t('Tracking'), iconName: 'moveH', min: -500, max: 2000, step: 5, unit: '‰', slider: true, sliderMin: -200, sliderMax: 600 }),
       h('div.field', h('span', t('Kerning')), kernPills), kernField,
@@ -273,7 +279,7 @@ export function createInspector() {
       stylesGrid.appendChild(chip);
       requestAnimationFrame(() => drawSample(c, 'Ab', { fontId: layer.doc.styles[0]?.font, height: 30, maxWidth: 80, effects: scaleEffects(effects, 0.35), fit: true }));
     }
-    const clearBtn = button({ label: t('Remove all'), icon: 'trash', kind: 'ghost', onClick: () => { checkpoint('project', 'Remove effects'); layer.effects = []; projectChanged('render', layer); build(); } });
+    const clearBtn = button({ label: t('Remove all'), icon: 'trash', kind: 'ghost', onClick: () => { if (!layer.effects.length) return; checkpoint('project', 'Remove effects'); layer.effects = []; projectChanged('render', layer); build(); undoToast(t('Removed all effects')); } });
     body.appendChild(section({ id: 'fx-styles', title: t('Styles'), iconName: 'sparkles' }, stylesGrid, h('p.hint', t('A style replaces the layer’s effects. Fine-tune each one below.'))));
 
     const addBtn = button({ label: t('Add effect'), icon: 'plus', kind: 'primary', onClick: (e) => {
@@ -299,7 +305,7 @@ export function createInspector() {
     const up = iconButton('chevronUp', t('Move up'), () => move(-1), { disabled: i === 0 });
     const down = iconButton('chevronDown', t('Move down'), () => move(1), { disabled: i === layer.effects.length - 1 });
     const dup = iconButton('copy', t('Duplicate'), () => { checkpoint('project', 'Duplicate effect'); layer.effects.splice(i, 0, { ...JSON.parse(JSON.stringify(fx)), id: newEffect(fx.type).id }); projectChanged('render', layer); build(); });
-    const del = iconButton('trash', t('Delete'), () => { checkpoint('project', 'Delete effect'); layer.effects.splice(i, 1); projectChanged('render', layer); build(); });
+    const del = iconButton('trash', t('Delete'), () => { checkpoint('project', 'Delete effect'); layer.effects.splice(i, 1); projectChanged('render', layer); build(); undoToast(t('Removed {name}', { name: L(fx.type) })); });
     const rst = iconButton('rotateCcw', t('Reset to default'), () => { checkpoint('project', 'Reset effect'); Object.assign(fx, JSON.parse(JSON.stringify(def.defaults))); projectChanged('render', layer); build(); });
     function move(d) { checkpoint('project', 'Reorder effects'); const [x] = layer.effects.splice(i, 1); layer.effects.splice(i + d, 0, x); projectChanged('render', layer); build(); }
     const card = h('div.fx-item', { class: fx.enabled ? '' : 'off' }, h('div.fx-head', nameBtn, vis, up, down, rst, dup, del), bodyEl);

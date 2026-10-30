@@ -8,6 +8,7 @@ import { caretAt, hitTest, selectionRects, moveVertical, moveHorizontal, lineSta
 import { nextWordBoundary } from '../../core/textdoc.js';
 import {
   typeText, deleteText, setCaret, selectAll, selectWord, selectParagraph, enterEdit, exitEdit, selectedText, nudgeSpacing, setChar, currentCharStyle,
+  setPara, currentParaStyle,
 } from '../../app/textedit.js';
 
 export function createStage() {
@@ -325,6 +326,20 @@ export function createStage() {
     else msg = t('Double-click a title to edit it, or press T to add one');
     hint.textContent = msg;
   }
+  // a short message in the hint pill, then back to the usual one
+  let hintTimer = 0;
+  function flashHint(msg) {
+    hint.textContent = msg;
+    clearTimeout(hintTimer);
+    hintTimer = setTimeout(updateHint, 1800);
+  }
+  // Alt+←/→: kern at the caret, or track the selection or the whole title; the new value shows in the hint
+  function spacingKey(delta, layer) {
+    const r = nudgeSpacing(delta, layer);
+    if (!r) { flashHint(t('Put the caret between two letters to kern them')); return; }
+    const v = r.value === undefined ? `${delta > 0 ? '+' : ''}${delta}` : r.value;
+    flashHint(`${r.kind === 'kern' ? t('Pair kern') : t('Tracking')} ${v} ‰`);
+  }
 
   canvas.addEventListener('pointerdown', (ev) => {
     const r = canvas.getBoundingClientRect();
@@ -580,7 +595,6 @@ export function createStage() {
     const layout = getLayout(layer);
     const ed = state.edit;
     const mod = e.ctrlKey || e.metaKey;
-    const rtlUI = document.documentElement.dir === 'rtl';
     wake();
     switch (e.key) {
       case 'Escape': e.preventDefault(); exitEdit(); return;
@@ -591,7 +605,7 @@ export function createStage() {
       case 'ArrowLeft': case 'ArrowRight': {
         e.preventDefault();
         const dir = e.key === 'ArrowRight' ? 1 : -1;
-        if (e.altKey && !mod) { nudgeSpacing(dir * (e.shiftKey ? 100 : 20) * (rtlUI ? 1 : 1)); return; }
+        if (e.altKey && !mod) { spacingKey(dir * (e.shiftKey ? 100 : 20), layer); return; }
         let pos;
         if (mod) pos = nextWordBoundary(layer.doc, ed.caret, dir * (isRTLAt(layout, ed.caret) ? -1 : 1));
         else if (!e.shiftKey && ed.caret !== ed.anchor) pos = dir > 0 ? Math.max(ed.caret, ed.anchor) : Math.min(ed.caret, ed.anchor);
@@ -602,9 +616,20 @@ export function createStage() {
       }
       case 'ArrowUp': case 'ArrowDown': {
         e.preventDefault();
+        // as in Photoshop: Alt+↑/↓ line spacing (down opens the lines up), with Shift the baseline shift
         if (e.altKey) {
-          const cs = currentCharStyle(layer);
-          if (e.shiftKey) setChar({ baselineShift: (cs.baselineShift || 0) + (e.key === 'ArrowUp' ? 2 : -2) }, 'bshift');
+          const up = e.key === 'ArrowUp';
+          if (e.shiftKey) {
+            const v = (currentCharStyle(layer).baselineShift || 0) + (up ? 2 : -2);
+            setChar({ baselineShift: v }, 'bshift');
+            flashHint(`${t('Baseline shift')} ${v} px`);
+          } else {
+            const ps = currentParaStyle(layer);
+            const multiple = ps.lineMode === 'multiple';
+            const v = Math.max(0, Math.round(((ps.lineValue ?? 1) + (up ? -1 : 1) * (multiple ? 0.05 : 2)) * 100) / 100);
+            setPara({ lineValue: v }, 'para:lv:' + layer.id);
+            flashHint(`${t('Line spacing')} ${multiple ? '×' + v : v + ' px'}`);
+          }
           return;
         }
         if (ed.goalX === null || ed.goalX === undefined) ed.goalX = caretAt(layout, ed.caret).x;
@@ -651,6 +676,11 @@ export function createStage() {
     if (e.key === 'v' || e.key === 'V') { setTool('select'); return; }
     if (e.key === 'h' || e.key === 'H') { setTool('hand'); return; }
     if (layer && e.key === 'Enter') { e.preventDefault(); enterEdit(layer.id); focusIme(); return; }
+    if (layer && !layer.locked && e.altKey && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
+      e.preventDefault();
+      spacingKey((e.key === 'ArrowRight' ? 1 : -1) * (e.shiftKey ? 100 : 20), layer);
+      return;
+    }
     if (layer && !layer.locked && e.key.startsWith('Arrow')) {
       e.preventDefault();
       const d = e.shiftKey ? 10 : 1;

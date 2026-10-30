@@ -191,6 +191,9 @@ function restore(scope, snap) {
   emit('fonts');
 }
 
+/** The latest undo step (to tell whether an Undo offered after an action would still undo that action). */
+export const lastUndoStep = () => undoStack[undoStack.length - 1] || null;
+
 /** Record the state of a scope before a change. coalesce: same key within 700 ms merges into one step. */
 export function checkpoint(scope, label, coalesce) {
   const now = Date.now();

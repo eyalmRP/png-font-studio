@@ -27,6 +27,14 @@ for (const file of files) {
   for (const m of src.matchAll(/\b(?:label|desc|name):\s*'((?:[^'\\]|\\.)*)'/g)) if (/charsets|export\.js|recolor|titles\.js/.test(rel)) add(unq(m[1]), rel + ' (table)');
   for (const m of src.matchAll(/\['\w+', '((?:[^'\\]|\\.)*)', '--[\w-]+'\]/g)) add(unq(m[1]), rel + ' (guides)');
   for (const m of src.matchAll(/\['((?:[^'\\]|\\.)*)', '#[0-9a-fA-F]{6}'\]/g)) add(unq(m[1]), rel + ' (colours)');
+  // the first-run guide's cards
+  if (rel.endsWith('tour.js')) for (const m of src.matchAll(/\b(?:title|text):\s*'((?:[^'\\]|\\.)*)'/g)) add(unq(m[1]), rel + ' (table)');
+  // the shortcut table: group titles, what each row does, and the mouse words
+  if (rel.endsWith('shortcuts.js')) {
+    for (const m of src.matchAll(/^\s*\['((?:[^'\\]|\\.)*)', \[$/gm)) add(unq(m[1]), rel + ' (table)');
+    for (const m of src.matchAll(/\],\s*'((?:[^'\\]|\\.)*)'\],$/gm)) add(unq(m[1]), rel + ' (table)');
+    for (const v of values(block(src, 'const WORDS = {'))) add(v, rel + ' (table)');
+  }
   for (const m of src.matchAll(/\bt\(\{([^}]*)\}/g)) for (const v of values('{' + m[1] + '}')) add(v, rel + ' (table)');
   for (const m of src.matchAll(/const detected = \{([^}]*)\}/g)) { for (const v of values('{' + m[1] + '}')) add(v, rel); add('flat', rel); }
 }

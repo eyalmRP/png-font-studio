@@ -5,6 +5,7 @@ import { h, storeGet, storeSet } from './ui/dom.js';
 import { faceVariant } from './core/recolor.js';
 import { state, addFont, createProject, projectFromJSON, newTextLayer, newEffect, emit, markLayer } from './app/store.js';
 import { mountApp, render, applyTheme } from './ui/app.js';
+import { maybeStartTour } from './ui/tour.js';
 import { fontFromAtlas, fontFromZipBytes } from './storage/files.js';
 import { loadFontRecords, saveFontRecord, loadProjectRecord } from './storage/library.js';
 import { startAutosave } from './ui/projectio.js';
@@ -184,6 +185,7 @@ async function boot() {
   saved.catch((e) => console.warn(e));
   startAutosave();
   on('remount', () => render());
+  maybeStartTour();
   // fonts can finish decoding after layers were laid out
   for (const l of state.project.layers) markLayer(l, 'layout');
   emit('project', { what: 'layout' });

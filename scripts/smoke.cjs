@@ -7,6 +7,8 @@ const { chromium } = require('playwright');
   const errors = [];
   page.on('console', (m) => { if (m.type() === 'error' || m.type() === 'warning') errors.push(`[${m.type()}] ${m.text()}`); });
   page.on('pageerror', (e) => errors.push('[pageerror] ' + e.message + '\n' + (e.stack || '').split('\n').slice(0, 5).join('\n')));
+  // the first-run guide would sit over the controls this test clicks
+  await page.addInitScript(() => localStorage.setItem('pfs:tourDone', 'true'));
   await page.goto('http://localhost:8765/index.html');
   await page.waitForTimeout(3000);
   await page.screenshot({ path: `${out}/s1-titles.png` });

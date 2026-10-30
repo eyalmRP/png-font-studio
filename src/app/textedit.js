@@ -166,22 +166,51 @@ export function selectParagraph(pos) {
 }
 
 /** Alt+←/→: kern the pair at a collapsed caret, or track the selection (1/1000 em steps). */
-export function nudgeSpacing(delta) {
+/** The character whose manual kern sits at the caret (the one after it), or -1 when the caret is not between two letters. */
+export function kernIndex(layer = selectedLayer()) {
+  if (!isCollapsedEdit(layer)) return -1;
+  const i = state.edit.caret, c = layer.doc.chars;
+  return i > 0 && i < c.length && c[i] !== '\n' && c[i - 1] !== '\n' ? i : -1;
+}
+
+/** Set the manual kern of the pair at the caret (1/1000 em). */
+export function setPairKern(value, coalesceKey) {
   const layer = selectedLayer();
-  const e = state.edit;
-  if (!layer || !e) return;
-  checkpoint('project', 'Kerning', 'kern:' + layer.id);
-  if (e.caret === e.anchor) {
-    const i = e.caret; // manual kern belongs to the character after the caret
-    if (i <= 0 || i >= layer.doc.chars.length || layer.doc.chars[i] === '\n') return;
-    const cur = layer.doc.styles[i]?.kern || 0;
-    applyCharStyle(layer.doc, i, i + 1, { kern: cur + delta });
-  } else {
-    const [s, en] = [Math.min(e.caret, e.anchor), Math.max(e.caret, e.anchor)];
-    const st = commonStyle(layer.doc, s, en, ['tracking']);
-    applyCharStyle(layer.doc, s, en, { tracking: (st.tracking ?? 0) + delta });
-  }
+  const i = kernIndex(layer);
+  if (i < 0) return;
+  checkpoint('project', 'Kerning', coalesceKey);
+  applyCharStyle(layer.doc, i, i + 1, { kern: value });
   edited(layer);
+}
+
+/**
+ * Alt+←/→: with a caret, kern the pair at it; with a selection, or a title selected but not being edited, add to the
+ * tracking of those letters (keeping any differences between them). Returns { kind, value } or null when nothing changed.
+ */
+export function nudgeSpacing(delta, layer = selectedLayer()) {
+  if (!layer) return null;
+  const e = state.edit && state.edit.layerId === layer.id ? state.edit : null;
+  const doc = layer.doc;
+  if (e && e.caret === e.anchor) {
+    const i = kernIndex(layer);
+    if (i < 0) return null;
+    checkpoint('project', 'Kerning', `kern:${layer.id}:${i}`);
+    const value = (doc.styles[i].kern || 0) + delta;
+    applyCharStyle(doc, i, i + 1, { kern: value });
+    edited(layer);
+    return { kind: 'kern', value };
+  }
+  const [s, en] = e ? [Math.min(e.caret, e.anchor), Math.max(e.caret, e.anchor)] : [0, doc.chars.length];
+  if (s === en) return null;
+  checkpoint('project', 'Tracking', `track:${layer.id}:${s}-${en}`);
+  const next = new Map();
+  for (let i = s; i < en; i++) {
+    const old = doc.styles[i];
+    if (!next.has(old)) next.set(old, Object.freeze({ ...old, tracking: (old.tracking || 0) + delta }));
+    doc.styles[i] = next.get(old);
+  }
+  if (e) edited(layer); else projectChanged('layout', layer);
+  return { kind: 'tracking', value: commonStyle(doc, s, en, ['tracking']).tracking };
 }
 
 export function enterEdit(layerId, caret = null) {

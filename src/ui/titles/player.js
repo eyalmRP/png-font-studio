@@ -2,7 +2,7 @@
 // length follows from the presets and the hold time.
 import { h, storeGet, storeSet } from '../dom.js';
 import { t } from '../i18n.js';
-import { iconButton, numberField, toggle } from '../controls.js';
+import { iconButton, numberField, toggle, rangeFill } from '../controls.js';
 import { state, on, emit, checkpoint } from '../../app/store.js';
 import { IN_PRESETS, OUT_PRESETS, phaseLength, unitIndex } from '../../core/anim.js';
 import { getLayout } from '../../render/layer.js';
@@ -49,6 +49,7 @@ export function createPlayer() {
   function refresh() {
     syncTiming();
     scrub.value = Math.round((state.time / Math.max(0.01, state.project.duration)) * 1000);
+    rangeFill(scrub);
     timeLabel.textContent = `${fmt(state.time)} / ${fmt(state.project.duration)}`;
   }
   function setTime(tm) {
@@ -83,7 +84,7 @@ export function createPlayer() {
     playBtn.replaceChildren(...iconButton('play', '').childNodes); playBtn.title = t('Play') + ' (K)';
     emit('playing', false);
   }
-  scrub.addEventListener('input', () => { if (state.playing) stop(); setTime((scrub.value / 1000) * state.project.duration); });
+  scrub.addEventListener('input', () => { rangeFill(scrub); if (state.playing) stop(); setTime((scrub.value / 1000) * state.project.duration); });
   scrub.addEventListener('keydown', (e) => e.stopPropagation());
 
   const offs = [

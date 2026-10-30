@@ -20,6 +20,10 @@ import { decodeImage, fontToZip, fontFromZipBytes, saveFile, safeName } from '..
 import { FACE_PRESETS, dominantHue, paletteFromStops, resolvePalette, remapPalette } from '../../core/recolor.js';
 import { saveFontRecord, deleteFontRecord } from '../../storage/library.js';
 import { drawSample } from '../sample.js';
+import { undoToast } from '../undotoast.js';
+
+// a button that opens a menu: a chevron at its end says so
+const menuButton = (o) => { const b = button({ ...o, class: 'has-menu' }); b.append(icon('chevronDown', 14)); return b; };
 import { exportFontPSD, updateFromPSD } from './psd.js';
 
 const GROUP_FILTERS = ['all', 'upper', 'lower', 'digits', 'punct', 'symbols', 'hebrew', 'other', 'missing'];
@@ -284,7 +288,17 @@ export function mountFonts({ left, right, center, exportSlot }) {
     if (!chars.length) sheet.appendChild(h('div.empty', { style: { gridColumn: '1 / -1' } }, filter === 'missing' ? t('Nothing missing in the standard sets.') : t('No glyphs here yet.')));
     const size = state.ui.glyphZoom;
     const cells = [];
+    // one grid per group, each in its script's direction whatever the interface language: Latin, digits and
+    // punctuation read left to right (as in the sheets and the importer), Hebrew right to left
+    const multi = new Set(chars.map(groupOf)).size > 1;
+    let grid = null, gid = null;
     for (const ch of chars) {
+      if (groupOf(ch) !== gid) {
+        gid = groupOf(ch);
+        if (multi) sheet.appendChild(h('div.sheet-group-title', t(GROUP_LABEL[gid])));
+        grid = h('div.sheet-grid', { role: 'rowgroup', dir: gid === 'hebrew' ? 'rtl' : 'ltr', 'aria-label': t(GROUP_LABEL[gid]) });
+        sheet.appendChild(grid);
+      }
       const g = font.glyphs.get(ch);
       const canvas = h('canvas', { 'aria-hidden': 'true' });
       const has = g && g.image;
@@ -302,7 +316,7 @@ export function mountFonts({ left, right, center, exportSlot }) {
         },
       }, canvas, h('div.cell-label', h('b', ch === ' ' ? '␠' : ch), h('span', charLabel(ch).replace('U+', ''))));
       cells.push([canvas, g, ch]);
-      sheet.appendChild(cell);
+      grid.appendChild(cell);
     }
     // draw progressively to keep the UI responsive
     let i = 0;
@@ -494,15 +508,22 @@ export function mountFonts({ left, right, center, exportSlot }) {
     }
     syncFields();
     const imgOp = (label, fn) => () => { checkpoint('font:' + font.id, label); g.image = fn(g.image); g.rev++; if (g.autoBaseline) autoMetrics(font); touch(font); afterFontEdit(font); };
+    const clearImage = () => { checkpoint('font:' + font.id, 'Clear glyph'); g.image = null; g.rev++; touch(font); afterFontEdit(font); undoToast(t('Cleared the image of “{c}”', { c: ch })); };
+    // the image fixes live in one menu, so the panel keeps to the everyday actions
+    const imageBtn = menuButton({ label: t('Edit image'), icon: 'wand', onClick: (e) => menu(e.currentTarget, [
+      { label: t('Flip ↔'), icon: 'flipH', onClick: imgOp('Flip', (im) => flipImage(im, true)) },
+      { label: t('Flip ↕'), icon: 'flipV', onClick: imgOp('Flip', (im) => flipImage(im, false)) },
+      { label: t('Rotate 90°'), icon: 'rotateCw', onClick: imgOp('Rotate', (im) => rotate90(im, true)) },
+      '-',
+      { label: t('Trim edges'), icon: 'crop', onClick: imgOp('Trim', (im) => trimImage(im, 8, 1).image) },
+      { label: t('Clean specks'), icon: 'eraser', onClick: imgOp('Clean up', (im) => cleanupAlpha(im, { low: 28, high: 160, minArea: 30 }).image) },
+      '-',
+      { label: t('Clear image'), icon: 'squareDashed', danger: true, onClick: clearImage },
+    ]) });
     const tools = h('div.tool-grid',
       button({ label: t('Replace image'), icon: 'replace', onClick: async () => { const [f] = await pickFiles({ multiple: false }); if (f) replaceGlyphFromFile(font, ch, f); } }),
       button({ label: t('Duplicate to…'), icon: 'copy', onClick: async () => { const to = await promptDialog(t('Duplicate glyph'), t('Copy “{c}” to character', { c: ch }), ''); if (!to) return; checkpoint('font:' + font.id, 'Duplicate glyph'); duplicateGlyph(font, ch, to); state.selectedGlyph = to; afterFontEdit(font); } }),
-      button({ label: t('Flip ↔'), icon: 'flipH', onClick: imgOp('Flip', (im) => flipImage(im, true)) }),
-      button({ label: t('Flip ↕'), icon: 'flipV', onClick: imgOp('Flip', (im) => flipImage(im, false)) }),
-      button({ label: t('Rotate 90°'), icon: 'rotateCw', onClick: imgOp('Rotate', (im) => rotate90(im, true)) }),
-      button({ label: t('Trim edges'), icon: 'crop', onClick: imgOp('Trim', (im) => trimImage(im, 8, 1).image) }),
-      button({ label: t('Clean specks'), icon: 'eraser', onClick: imgOp('Clean up', (im) => cleanupAlpha(im, { low: 28, high: 160, minArea: 30 }).image) }),
-      button({ label: t('Clear image'), icon: 'squareDashed', onClick: () => { checkpoint('font:' + font.id, 'Clear glyph'); g.image = null; g.rev++; touch(font); afterFontEdit(font); } }),
+      imageBtn,
       button({ label: t('Delete glyph'), icon: 'trash', kind: 'danger', onClick: () => deleteGlyphs([ch]) }),
     );
     // reset: placed automatically again, no extra spacing, its imported size unless the font evened it out
@@ -544,7 +565,7 @@ export function mountFonts({ left, right, center, exportSlot }) {
         h('div.tool-head', t('Files')),
         h('div.tool-grid',
           button({ label: t('Save font file'), icon: 'save', class: 'span-all', onClick: () => saveFontFile(font) }),
-          button({ label: t('Export PSD'), icon: 'layers', title: t('Every character on its own layer, stacked in one glyph box or laid out as a sheet'), onClick: (e) => psdMenu(e.currentTarget, font) }),
+          menuButton({ label: t('Export PSD'), icon: 'layers', title: t('Every character on its own layer, stacked in one glyph box or laid out as a sheet'), onClick: (e) => psdMenu(e.currentTarget, font) }),
           button({ label: t('Update from PSD'), icon: 'upload', title: t('Read an edited PSD back into this font, or into a new one'), onClick: () => importPSD(font) }),
         )));
   }
@@ -576,11 +597,12 @@ export function mountFonts({ left, right, center, exportSlot }) {
   async function deleteGlyphs(chars) {
     const font = currentFont();
     if (!font || !chars.length) return;
-    if (chars.length > 1 && !(await confirmDialog(t('Delete glyphs'), t('Delete {n} glyphs from {font}?', { n: chars.length, font: font.name }), t('Delete'), true))) return;
     checkpoint('font:' + font.id, 'Delete glyph');
     for (const c of chars) font.glyphs.delete(c);
     state.selectedGlyph = null; state.selectedGlyphs.clear();
     afterFontEdit(font);
+    // Undo in the message instead of asking first
+    undoToast(chars.length === 1 ? t('Deleted “{c}”', { c: chars[0] }) : t('Deleted {n} glyphs', { n: chars.length }));
   }
 
   function afterFontEdit(font, light = false) {

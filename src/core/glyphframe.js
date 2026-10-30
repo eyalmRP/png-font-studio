@@ -4,8 +4,11 @@
 // later change to the font cannot shift the mapping.
 import { glyphWidth, glyphTop, glyphBottom } from './font.js';
 
-/** Frame for a font: { p (px per font unit), w, h, baseline (px row), lines: { ascender, capHeight, xHeight, baseline, descender } (px rows) }. */
-export function glyphFrame(font) {
+/**
+ * Frame for a font: { p (px per font unit), w, h, baseline (px row), lines: { ascender, capHeight, xHeight, baseline,
+ * descender } (px rows) }. pad is the room around the glyphs, as a share of the em.
+ */
+export function glyphFrame(font, { pad: padEm = 0.3 } = {}) {
   const glyphs = [...font.glyphs.values()].filter((g) => g.image);
   const m = font.metrics;
   // the finest pixel among the glyphs, so nothing is scaled down (within reason: at most 4 px per unit)
@@ -15,7 +18,7 @@ export function glyphFrame(font) {
   const bottom = Math.max(m.descender, ...glyphs.map(glyphBottom));
   const adv = Math.max(m.capHeight, ...glyphs.map((g) => g.lsb + glyphWidth(g) + g.rsb));
   // room to draw bigger than the current glyphs
-  const pad = (m.ascender + m.descender) * 0.3;
+  const pad = (m.ascender + m.descender) * padEm;
   const w = Math.ceil((adv + pad * 2) * p), h = Math.ceil((top + bottom + pad * 2) * p);
   const baseline = Math.round((pad + top) * p);
   const row = (units) => Math.round(baseline - units * p);
@@ -70,4 +73,33 @@ export function layerChar(name) {
   if ([...s].length === 1) return s;
   const m = s.match(/^U\+([0-9A-Fa-f]{4,6})$/);
   return m ? String.fromCodePoint(parseInt(m[1], 16)) : null;
+}
+
+// ---------- sheet: every glyph in its own cell ----------
+
+export const SHEET_COLUMNS = 13;
+export const SHEET_PAD = 0.12;
+
+/** Cells for character groups, each group starting a new row: { cols, rows, cells: [{ char, col, row }] }. */
+export function sheetCells(groups, cols = SHEET_COLUMNS) {
+  const cells = [];
+  let row = 0;
+  for (const chars of groups) {
+    if (!chars.length) continue;
+    chars.forEach((char, i) => cells.push({ char, col: i % cols, row: row + Math.floor(i / cols) }));
+    row += Math.ceil(chars.length / cols);
+  }
+  return { cols, rows: row, cells };
+}
+
+const SHEET_TAG = 'PNG Font Studio sheet';
+export function sheetName(frame, cols) {
+  return `${SHEET_TAG} · p=${frame.p} · baseline=${frame.baseline} · cell=${frame.w}x${frame.h} · cols=${cols}`;
+}
+export function parseSheetName(name) {
+  if (!name || !name.startsWith(SHEET_TAG)) return null;
+  const num = (k) => { const m = name.match(new RegExp(`${k}=([0-9.]+)`)); return m ? +m[1] : NaN; };
+  const cell = name.match(/cell=(\d+)x(\d+)/);
+  const f = { p: num('p'), baseline: num('baseline'), w: cell ? +cell[1] : NaN, h: cell ? +cell[2] : NaN, cols: num('cols') };
+  return Object.values(f).every(Number.isFinite) ? f : null;
 }

@@ -282,3 +282,15 @@ test('Photoshop glyph frame: shared baseline, finest resolution, frame numbers s
   assert.deepEqual(inkBearings(font.glyphs.get('A')), { left: 6, right: 8 });
   assert.deepEqual(alphaBox(img(10, 4)), { l: 2, t: 0, r: 7, b: 3 });
 });
+
+test('Photoshop sheet: each group starts a row, and the sheet numbers survive a layer name', async () => {
+  const { sheetCells, sheetName, parseSheetName } = await import('../src/core/glyphframe.js');
+  const { cols, rows, cells } = sheetCells([[...'ABCDEFGHIJKLMNOPQRSTUVWXYZ'], [...'0123456789'], [], ['!']], 13);
+  assert.equal(cols, 13);
+  assert.equal(rows, 4); // 2 rows of capitals, then the digits, then '!'
+  const at = Object.fromEntries(cells.map((c) => [c.char, [c.col, c.row]]));
+  assert.deepEqual([at.A, at.M, at.N, at.Z, at['0'], at['9'], at['!']], [[0, 0], [12, 0], [0, 1], [12, 1], [0, 2], [9, 2], [0, 3]]);
+  const frame = { p: 1.3956043956043958, baseline: 384, w: 435, h: 555 };
+  assert.deepEqual(parseSheetName(sheetName(frame, 13)), { ...frame, cols: 13 });
+  assert.equal(parseSheetName('PNG Font Studio frame · p=1'), null);
+});

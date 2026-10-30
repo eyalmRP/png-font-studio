@@ -88,12 +88,17 @@ export function mountFonts({ left, right, center, exportSlot }) {
   }
 
   // Photoshop round trip: one glyph-size PSD with a layer per character
-  async function exportPSD(f) {
+  async function exportPSD(f, layout) {
     try {
       toast(t('Preparing the Photoshop file…'), 'info', 2500);
-      if ((await exportFontPSD(f)) === 'saved') toast(t('Saved {name}', { name: `${safeName(f.name, 'font')} for Photoshop.zip` }), 'ok');
+      if ((await exportFontPSD(f, layout)) === 'saved') toast(t('Saved {name}', { name: `${safeName(f.name, 'font')}${layout === 'sheet' ? ' sheet' : ''} for Photoshop.zip` }), 'ok');
     } catch (e) { toast(e.message, 'error', 6000); }
   }
+  // two layouts: letters stacked in one glyph box (drawing and fixing), or a sheet of cells (restyling)
+  const psdMenu = (anchor, f) => menu(anchor, [
+    { label: t('Stacked letters'), hint: t('one glyph box, for fixing and drawing letters'), icon: 'layers', onClick: () => exportPSD(f, 'stack') },
+    { label: t('Full sheet'), hint: t('every letter in its cell, for restyling with layer styles and adjustments'), icon: 'grid', onClick: () => exportPSD(f, 'sheet') },
+  ]);
   async function importPSD(f) {
     const [file] = await pickFiles({ accept: '.psd,.zip,image/vnd.adobe.photoshop,application/zip', multiple: false });
     if (!file) return;
@@ -531,7 +536,7 @@ export function mountFonts({ left, right, center, exportSlot }) {
         button({ label: t('Auto-place all'), icon: 'wand', onClick: remeasure }),
         button({ label: t('Even out sizes'), icon: 'arrowsV', onClick: () => setM('Even out sizes', (fo) => { const ch = normalizeSizes(fo); autoMetrics(fo); toast(ch.length ? t('Resized {n} glyphs: {list}', { n: ch.length, list: ch.map((c) => c.char).join(' ') }) : t('Sizes are already even'), 'ok', 4000); }) }),
         button({ label: t('Save font file'), icon: 'save', onClick: () => saveFontFile(font) }),
-        button({ label: t('Edit in Photoshop'), icon: 'layers', title: t('A PSD the size of one glyph, with every character on its own layer over the guides'), onClick: () => exportPSD(font) }),
+        button({ label: t('Edit in Photoshop'), icon: 'layers', title: t('Every character on its own layer, stacked in one glyph box or laid out as a sheet'), onClick: (e) => psdMenu(e.currentTarget, font) }),
         button({ label: t('Update from Photoshop'), icon: 'upload', title: t('Read an edited PSD back into this font, or into a new one'), onClick: () => importPSD(font) }),
       ),
       h('p.hint', t('Even out sizes fixes sheets where each cell was scaled to fill its box, keeping the optical overshoot of round letters.')));

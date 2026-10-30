@@ -1,12 +1,15 @@
-// Photoshop round trip for a font. Export: a PSD the size of one glyph box with every character as a layer (named by
-// its character, grouped, one shown at a time) over locked guides, zipped with a short how-to (claude.ai saves .zip,
-// not .psd). Import: each character layer, with the layers clipped to it and its mask, becomes the glyph again;
-// untouched letters stay exactly as they were, moved ones keep their artwork, edited ones keep their side bearings.
+// Photoshop round trip for a font, in two layouts, both zipped with a short how-to (claude.ai saves .zip, not .psd):
+// - stack: a PSD the size of one glyph box, every character a layer (one shown at a time) over locked guides. Import
+//   reads each character layer with the layers clipped to it and its mask.
+// - sheet: every character a layer in its own cell, with Photoshop guides only. Import reads Photoshop's flattened
+//   image cell by cell, so layer styles, adjustments and filters count (falling back to the layers when it can't).
+// Untouched letters stay exactly as they were, letters only moved up or down keep their artwork, edited ones keep
+// their side bearings.
 import { h } from '../dom.js';
 import { t } from '../i18n.js';
 import { modal, button, toast } from '../controls.js';
 import { CHARSET_GROUPS } from '../../core/charsets.js';
-import { glyphFrame, placeGlyph, alphaBox, inkBearings, frameName, parseFrameName, layerChar } from '../../core/glyphframe.js';
+import { glyphFrame, placeGlyph, alphaBox, inkBearings, frameName, parseFrameName, layerChar, sheetCells, sheetName, parseSheetName, SHEET_PAD } from '../../core/glyphframe.js';
 import { setGlyph, touch, cloneFont } from '../../core/font.js';
 import { createImage } from '../../core/image.js';
 import { zipSync, unzip } from '../../core/zip.js';
@@ -52,28 +55,42 @@ function groupOf(ch) {
   return 'other';
 }
 
-/** Export the font as a PSD (inside a ZIP with the how-to). Returns 'saved' | 'declined'. */
-export async function exportFontPSD(font) {
-  const lib = await loadPSD();
-  const frame = glyphFrame(font);
+/** The font's characters by group, each with the characters it lacks (Hebrew only when it has some). */
+function fontGroups(font) {
   const have = new Map([...font.glyphs].filter(([, g]) => g.image));
-  // empty layers for characters the font doesn't have yet (Hebrew only when the font has some)
   const missing = CHARSET_GROUPS.filter((g) => g.id !== 'hebrew' || g.chars.some((c) => have.has(c))).flatMap((g) => g.chars).filter((c) => !have.has(c));
-  const shown = have.has('H') ? 'H' : [...have.keys()][0];
-  const order = (chars) => chars.sort((a, b) => a.codePointAt(0) - b.codePointAt(0));
   const groups = [];
   for (const [id, label] of GROUPS) {
-    const chars = order([...have.keys()].filter((c) => groupOf(c) === id));
-    const empty = order(missing.filter((c) => groupOf(c) === id));
-    if (!chars.length && !empty.length) continue;
-    // Photoshop lists the last child on top: put the group's first character on top
-    const layers = [...chars, ...empty].sort((a, b) => a.codePointAt(0) - b.codePointAt(0)).reverse().map((c) => {
-      if (!have.has(c)) return { name: c, hidden: true, layerColor: 'gray' };
-      const px = glyphPixels(frame, have.get(c));
-      return { name: c, left: px.x, top: px.y, imageData: px.imageData, hidden: c !== shown };
-    });
-    groups.push({ name: t(label), opened: chars.includes(shown), children: layers });
+    const chars = [...have.keys(), ...missing].filter((c) => groupOf(c) === id).sort((a, b) => a.codePointAt(0) - b.codePointAt(0));
+    if (chars.length) groups.push({ label, chars });
   }
+  return { have, groups };
+}
+
+/** A character's layer at (dx, dy) + its place in the frame; characters the font lacks are empty grey layers. */
+function letterLayer(frame, have, c, dx, dy, hidden) {
+  if (!have.has(c)) return { name: c, hidden, layerColor: 'gray' };
+  const px = glyphPixels(frame, have.get(c));
+  return { name: c, left: dx + px.x, top: dy + px.y, imageData: px.imageData, hidden };
+}
+
+/** Export the font for Photoshop (layout 'stack' or 'sheet'), as a ZIP with the how-to. Returns 'saved' | 'declined'. */
+export async function exportFontPSD(font, layout = 'stack') {
+  const lib = await loadPSD();
+  const { have, groups } = fontGroups(font);
+  const psd = layout === 'sheet' ? sheetPSD(have, groups, font) : stackPSD(have, groups, font);
+  const bytes = new Uint8Array(lib.writePsd(psd, { generateThumbnail: false }));
+  const base = safeName(font.name, 'font');
+  const file = layout === 'sheet' ? `${base} sheet` : base;
+  const zip = zipSync([{ name: `${file}.psd`, data: bytes }, { name: 'How to edit in Photoshop.txt', data: layout === 'sheet' ? sheetHowTo(file) : howTo(file) }]);
+  return saveFile(`${file} for Photoshop.zip`, new Blob([zip], { type: 'application/zip' }));
+}
+
+function stackPSD(have, groups, font) {
+  const frame = glyphFrame(font);
+  const shown = have.has('H') ? 'H' : [...have.keys()][0];
+  // Photoshop lists the last child on top: put each group's first character on top
+  const layers = groups.map((g) => ({ name: t(g.label), opened: g.chars.includes(shown), children: g.chars.map((c) => letterLayer(frame, have, c, 0, 0, c !== shown)).reverse() }));
 
   // guides: lines and labels as locked layers, the same lines as Photoshop guides, and the frame numbers
   const lines = canvasOf(frame.w, frame.h), labels = canvasOf(frame.w, frame.h);
@@ -108,17 +125,60 @@ export async function exportFontPSD(font) {
   const cx = comp.getContext('2d');
   if (shown) { const px = glyphPixels(frame, have.get(shown)); const c = canvasOf(px.imageData.width, px.imageData.height); c.getContext('2d').putImageData(px.imageData, 0, 0); cx.drawImage(c, px.x, px.y); }
   cx.globalAlpha = 0.85; cx.drawImage(lines, 0, 0); cx.drawImage(labels, 0, 0);
-
-  const psd = {
+  return {
     width: frame.w, height: frame.h,
-    children: [...groups.reverse(), guides],
+    children: [...layers.reverse(), guides],
     imageData: cx.getImageData(0, 0, frame.w, frame.h),
     imageResources: { gridAndGuidesInformation: { guides: [...[...rows.keys()].map((y) => ({ location: y, direction: 'horizontal' })), { location: Math.floor(frame.w / 2), direction: 'vertical' }] } },
   };
-  const bytes = new Uint8Array(lib.writePsd(psd, { generateThumbnail: false }));
-  const base = safeName(font.name, 'font');
-  const zip = zipSync([{ name: `${base}.psd`, data: bytes }, { name: 'How to edit in Photoshop.txt', data: howTo(base) }]);
-  return saveFile(`${base} for Photoshop.zip`, new Blob([zip], { type: 'application/zip' }));
+}
+
+function sheetPSD(have, groups, font) {
+  const frame = glyphFrame(font, { pad: SHEET_PAD });
+  const { cols, rows, cells } = sheetCells(groups.map((g) => g.chars));
+  const at = new Map(cells.map((c) => [c.char, c]));
+  const layers = groups.map((g) => ({
+    name: t(g.label), opened: false,
+    children: g.chars.map((c) => { const cell = at.get(c); return letterLayer(frame, have, c, cell.col * frame.w, cell.row * frame.h, false); }).reverse(),
+  }));
+  // Photoshop guides only: the cell borders, and the metric lines on every row
+  const lines = new Set();
+  const guides = [];
+  const add = (location, direction) => { const k = direction + location; if (!lines.has(k)) { lines.add(k); guides.push({ location, direction }); } };
+  for (let c = 0; c <= cols; c++) add(c * frame.w, 'vertical');
+  for (let r = 0; r <= rows; r++) {
+    add(r * frame.h, 'horizontal');
+    if (r < rows) for (const [key] of LINES) { const y = frame.lines[key]; if (y > 0 && y < frame.h) add(r * frame.h + y, 'horizontal'); }
+  }
+  // no flattened image: Photoshop makes it from the layers when the file is saved (the sheet is too big to build here)
+  return {
+    width: cols * frame.w, height: rows * frame.h,
+    children: [...layers.reverse(), { name: sheetName(frame, cols), hidden: true, protected: { all: true } }],
+    imageResources: { gridAndGuidesInformation: { guides } },
+  };
+}
+
+function sheetHowTo(file) {
+  return [
+    `${file}.psd - restyling a PNG Font Studio font in Photoshop`,
+    '',
+    'Every character is a layer in its own cell, in groups (Uppercase, Lowercase, Digits ...). Photoshop guides mark',
+    'the cells and, on every row, the ascender, cap height, x-height, baseline and descender (View > Show > Guides).',
+    '',
+    'Restyle freely: layer styles (fx), adjustment layers, filters, clipped textures and blend modes all count,',
+    'because the app reads the sheet the way Photoshop shows it.',
+    '- Keep every letter inside its cell: anything past the cell edge is cut off, so keep glows and shadows small.',
+    '- Keep the layer names (the characters), the canvas size, and the "PNG Font Studio sheet" layer.',
+    '- Grey empty layers are characters the font does not have yet: draw on them, inside their cell.',
+    '- Moving a letter up or down moves it on the baseline. Left and right spacing comes from the font.',
+    '- The letters need a transparent background: hide any background layer before saving.',
+    '- Save with "Maximize Compatibility" on (Photoshop asks when saving). Without it the app can only read the',
+    '  letter layers themselves, without styles and adjustments.',
+    '',
+    'Back in PNG Font Studio: Fonts > Update from Photoshop, and pick the .psd (or this zip).',
+    'Letters you did not change stay exactly as they were.',
+    '',
+  ].join('\n');
 }
 
 function howTo(base) {
@@ -158,26 +218,51 @@ async function psdBytes(file) {
 
 const BLEND = { normal: 'source-over', multiply: 'multiply', screen: 'screen', overlay: 'overlay', darken: 'darken', lighten: 'lighten', 'color dodge': 'color-dodge', 'color burn': 'color-burn', 'hard light': 'hard-light', 'soft light': 'soft-light', difference: 'difference', exclusion: 'exclusion', hue: 'hue', saturation: 'saturation', color: 'color', luminosity: 'luminosity' };
 
-/** A layer's pixels (with its mask) on a frame-size canvas. */
-function layerCanvas(L, w, hh) {
+/** A layer's pixels (with its mask) on a w × h canvas whose top-left is (dx, dy) in the document. */
+function layerCanvas(L, w, hh, dx = 0, dy = 0) {
   const c = canvasOf(w, hh);
   const d = L.imageData;
   if (!d || !d.width || !d.height) return c;
   const x = c.getContext('2d');
-  x.putImageData(new ImageData(to8(d), d.width, d.height), L.left || 0, L.top || 0);
+  // drawn through a canvas (not putImageData) so pixels outside the area are simply left out
+  const src = canvasOf(d.width, d.height);
+  src.getContext('2d').putImageData(new ImageData(to8(d), d.width, d.height), 0, 0);
+  x.drawImage(src, (L.left || 0) - dx, (L.top || 0) - dy);
   const m = L.mask;
   if (m && !m.disabled && m.imageData && m.imageData.width) {
     // the mask's grey level is the layer's visibility; outside the mask its default colour applies
     const mc = canvasOf(w, hh), mx = mc.getContext('2d');
+    const ml = (m.left || 0) - dx, mt = (m.top || 0) - dy;
     mx.fillStyle = `rgba(0,0,0,${(m.defaultColor ?? 255) / 255})`; mx.fillRect(0, 0, w, hh);
-    mx.clearRect(m.left || 0, m.top || 0, m.imageData.width, m.imageData.height);
+    mx.clearRect(ml, mt, m.imageData.width, m.imageData.height);
     const md = to8(m.imageData), a = new ImageData(m.imageData.width, m.imageData.height);
     for (let i = 0; i < a.data.length; i += 4) a.data[i + 3] = md[i];
     const tmp = canvasOf(a.width, a.height); tmp.getContext('2d').putImageData(a, 0, 0);
-    mx.drawImage(tmp, m.left || 0, m.top || 0);
+    mx.drawImage(tmp, ml, mt);
     x.globalCompositeOperation = 'destination-in'; x.drawImage(mc, 0, 0); x.globalCompositeOperation = 'source-over';
   }
   return c;
+}
+
+/** A character layer with what is clipped to it, as Photoshop shows it (layer styles aside): ImageData of w × h at (dx, dy). */
+function letterPixels(ch, L, clipped, w, hh, dx, dy, notes) {
+  const c = layerCanvas(L, w, hh, dx, dy);
+  const x = c.getContext('2d');
+  if (L.opacity !== undefined && L.opacity < 1) { const tmp = canvasOf(w, hh); const tx = tmp.getContext('2d'); tx.globalAlpha = L.opacity; tx.drawImage(c, 0, 0); x.clearRect(0, 0, w, hh); x.drawImage(tmp, 0, 0); }
+  const base = canvasOf(w, hh); base.getContext('2d').drawImage(c, 0, 0);
+  if (notes && hasEffects(L)) notes.push(t('“{c}” has layer styles (fx), which are not read: rasterize them first', { c: ch }));
+  for (const C of clipped) {
+    if (C.hidden) continue;
+    if (C.adjustment) { if (notes) notes.push(t('Adjustment layer “{name}” on “{c}” is not applied', { name: C.name, c: ch })); continue; }
+    if (notes && hasEffects(C)) notes.push(t('“{c}” has layer styles (fx), which are not read: rasterize them first', { c: ch }));
+    const cc = layerCanvas(C, w, hh, dx, dy), ccx = cc.getContext('2d');
+    ccx.globalCompositeOperation = 'destination-in'; ccx.drawImage(base, 0, 0);
+    x.globalAlpha = C.opacity ?? 1;
+    x.globalCompositeOperation = BLEND[C.blendMode] || 'source-over';
+    x.drawImage(cc, 0, 0);
+    x.globalAlpha = 1; x.globalCompositeOperation = 'source-over';
+  }
+  return x.getImageData(0, 0, w, hh);
 }
 
 /** 16-bit and 32-bit layer data as 8-bit RGBA. */
@@ -189,31 +274,15 @@ function to8(d) {
 
 const hasEffects = (L) => !!(L.effects && !L.effects.disabled && Object.entries(L.effects).some(([k, v]) => k !== 'scale' && k !== 'disabled' && (Array.isArray(v) ? v.some((e) => e.enabled !== false) : v && v.enabled !== false)));
 
-/**
- * Read a PSD against a font: which letters changed, moved or are new. Returns
- * { frame, changes: [{ char, kind: 'changed'|'moved'|'new', image, top, dy }], unchanged, notes }.
- */
-export async function readFontPSD(font, file) {
-  const lib = await loadPSD();
-  const psd = lib.readPsd((await psdBytes(file)).slice().buffer, { useImageData: true, skipCompositeImageData: true, skipThumbnail: true, skipLinkedFilesData: true });
-  if (psd.colorMode !== undefined && psd.colorMode !== 3) throw new Error(t('Save the PSD in RGB colour mode (Image > Mode > RGB Color)'));
-  const notes = [];
-  // the frame the PSD was made with; without it, the font's frame now
-  let frame = null;
-  const walkFrame = (list) => { for (const L of list || []) { const f = parseFrameName(L.name); if (f) frame = f; walkFrame(L.children); } };
-  walkFrame(psd.children);
-  const fresh = glyphFrame(font);
-  if (!frame) { frame = { p: fresh.p, baseline: fresh.baseline, w: fresh.w, h: fresh.h }; notes.push(t('The frame layer is missing, so the letters were placed with the font’s current frame')); }
-  if (psd.width !== frame.w || psd.height !== frame.h) throw new Error(t('The canvas size changed ({w}×{h} instead of {fw}×{fh}). Change it back so the letters line up with the font.', { w: psd.width, h: psd.height, fw: frame.w, fh: frame.h }));
-
-  // character layers (the topmost wins when a name repeats) and what is clipped to each
+/** Character layers in the document (the topmost wins when a name repeats) with the layers clipped to each. */
+function characterLayers(psd, notes) {
   const found = new Map();
   const walk = (list) => {
     const kids = list || [];
     for (let i = 0; i < kids.length; i++) {
       const L = kids[i];
       if (L.children) { if (!L.children.some((c) => parseFrameName(c.name))) walk(L.children); continue; }
-      if (L.clipping) continue;
+      if (L.clipping || parseSheetName(L.name)) continue;
       const clipped = [];
       for (let j = i + 1; j < kids.length && kids[j].clipping; j++) clipped.push(kids[j]);
       const ch = layerChar(L.name);
@@ -227,44 +296,107 @@ export async function readFontPSD(font, file) {
     }
   };
   walk(psd.children);
+  return found;
+}
 
+/** Compare a letter's pixels (ImageData in frame coordinates) with the font: a change, or null when there is none. */
+function judge(font, frame, ch, data) {
+  const box = alphaBox(data);
+  if (!box) return null; // an empty layer or cell changes nothing
+  const w = box.r - box.l + 1, hh = box.b - box.t + 1;
+  const crop = new Uint8ClampedArray(w * hh * 4);
+  for (let y = 0; y < hh; y++) crop.set(data.data.subarray(((box.t + y) * data.width + box.l) * 4, ((box.t + y) * data.width + box.l + w) * 4), y * w * 4);
+  const img = createImage(w, hh, crop);
+  const old = font.glyphs.get(ch);
+  if (!old || !old.image) return { char: ch, kind: 'new', image: img, top: box.t, box };
+  // compare with the letter as exported
+  const px = glyphPixels(frame, old);
+  const ob = alphaBox(px.imageData);
+  const same = ob && ob.r - ob.l + 1 === w && ob.b - ob.t + 1 === hh && samePixels(px.imageData, ob, img);
+  // a sideways move changes nothing: the spacing comes from the font
+  if (same) { const dy = px.y + ob.t - box.t; return dy ? { char: ch, kind: 'moved', dy, box } : null; }
+  return { char: ch, kind: 'changed', image: img, top: box.t, box };
+}
+
+/**
+ * Read a PSD against a font: which letters changed, moved or are new. Returns
+ * { frame, changes: [{ char, kind: 'changed'|'moved'|'new', image, top, dy }], unchanged, notes }.
+ */
+export async function readFontPSD(font, file) {
+  const lib = await loadPSD();
+  const psd = lib.readPsd((await psdBytes(file)).slice().buffer, { useImageData: true, skipThumbnail: true, skipLinkedFilesData: true });
+  if (psd.colorMode !== undefined && psd.colorMode !== 3) throw new Error(t('Save the PSD in RGB colour mode (Image > Mode > RGB Color)'));
+  const notes = [];
+  let stack = null, sheet = null;
+  const find = (list) => { for (const L of list || []) { stack ||= parseFrameName(L.name); sheet ||= parseSheetName(L.name); find(L.children); } };
+  find(psd.children);
+  const found = characterLayers(psd, notes);
+  const res = sheet ? readSheet(font, psd, sheet, found, notes) : readStack(font, psd, stack, found, notes);
+  return { ...res, notes: [...new Set(notes)] };
+}
+
+function readStack(font, psd, frame, found, notes) {
+  if (!frame) {
+    const f = glyphFrame(font);
+    frame = { p: f.p, baseline: f.baseline, w: f.w, h: f.h };
+    notes.push(t('The frame layer is missing, so the letters were placed with the font’s current frame'));
+  }
+  if (psd.width !== frame.w || psd.height !== frame.h) throw new Error(t('The canvas size changed ({w}×{h} instead of {fw}×{fh}). Change it back so the letters line up with the font.', { w: psd.width, h: psd.height, fw: frame.w, fh: frame.h }));
   const changes = [];
   let unchanged = 0;
   for (const [ch, { L, clipped }] of found) {
-    // the letter with its clipped layers, as Photoshop shows it (layer styles aside)
-    const c = layerCanvas(L, frame.w, frame.h);
-    const x = c.getContext('2d');
-    if (L.opacity !== undefined && L.opacity < 1) { const tmp = canvasOf(frame.w, frame.h); const tx = tmp.getContext('2d'); tx.globalAlpha = L.opacity; tx.drawImage(c, 0, 0); x.clearRect(0, 0, frame.w, frame.h); x.drawImage(tmp, 0, 0); }
-    const base = canvasOf(frame.w, frame.h); base.getContext('2d').drawImage(c, 0, 0);
-    if (hasEffects(L)) notes.push(t('“{c}” has layer styles (fx), which are not read: rasterize them first', { c: ch }));
-    for (const C of clipped) {
-      if (C.hidden) continue;
-      if (C.adjustment) { notes.push(t('Adjustment layer “{name}” on “{c}” is not applied', { name: C.name, c: ch })); continue; }
-      if (hasEffects(C)) notes.push(t('“{c}” has layer styles (fx), which are not read: rasterize them first', { c: ch }));
-      const cc = layerCanvas(C, frame.w, frame.h), ccx = cc.getContext('2d');
-      ccx.globalCompositeOperation = 'destination-in'; ccx.drawImage(base, 0, 0);
-      x.globalAlpha = C.opacity ?? 1;
-      x.globalCompositeOperation = BLEND[C.blendMode] || 'source-over';
-      x.drawImage(cc, 0, 0);
-      x.globalAlpha = 1; x.globalCompositeOperation = 'source-over';
-    }
-    const all = x.getImageData(0, 0, frame.w, frame.h);
-    const box = alphaBox(all);
-    if (!box) continue; // an empty layer changes nothing
-    const w = box.r - box.l + 1, hh = box.b - box.t + 1;
-    const img = createImage(w, hh, x.getImageData(box.l, box.t, w, hh).data);
-    const old = font.glyphs.get(ch);
-    if (!old || !old.image) { changes.push({ char: ch, kind: 'new', image: img, top: box.t }); continue; }
-    // compare with the letter as exported
-    const px = glyphPixels(frame, old);
-    const ob = alphaBox(px.imageData);
-    const same = ob && ob.r - ob.l + 1 === w && ob.b - ob.t + 1 === hh && samePixels(px.imageData, ob, img);
-    if (same && px.x + ob.l === box.l && px.y + ob.t === box.t) { unchanged++; continue; }
-    // a sideways move changes nothing: the spacing comes from the font
-    if (same) { const dy = px.y + ob.t - box.t; if (dy) changes.push({ char: ch, kind: 'moved', dy }); else unchanged++; continue; }
-    changes.push({ char: ch, kind: 'changed', image: img, top: box.t });
+    const ch2 = judge(font, frame, ch, letterPixels(ch, L, clipped, frame.w, frame.h, 0, 0, notes));
+    if (ch2) changes.push(ch2); else if (font.glyphs.get(ch)?.image) unchanged++;
   }
-  return { frame, changes, unchanged, notes: [...new Set(notes)] };
+  return { frame, changes, unchanged };
+}
+
+function readSheet(font, psd, sheet, found, notes) {
+  const frame = { p: sheet.p, baseline: sheet.baseline, w: sheet.w, h: sheet.h };
+  const W = sheet.cols * frame.w;
+  if (psd.width !== W || psd.height % frame.h) throw new Error(t('The canvas size changed ({w}×{h} instead of {fw}×{fh}). Change it back so the letters line up with the font.', { w: psd.width, h: psd.height, fw: W, fh: Math.round(psd.height / frame.h) * frame.h }));
+  // each character's cell is where its layer sits
+  const cells = new Map(), taken = new Map();
+  for (const [ch, { L }] of found) {
+    if (!L.imageData || !L.imageData.width) continue;
+    const col = Math.floor(((L.left + L.right) / 2) / frame.w), row = Math.floor(((L.top + L.bottom) / 2) / frame.h);
+    if (taken.has(col + ',' + row)) { notes.push(t('“{c}” and “{d}” are in the same cell; “{c}” was skipped', { c: ch, d: taken.get(col + ',' + row) })); continue; }
+    taken.set(col + ',' + row, ch);
+    cells.set(ch, { x: col * frame.w, y: row * frame.h });
+  }
+  // the flattened image is usable when it is the letters on transparency: test the corners of their cells
+  const comp = psd.imageData && psd.imageData.width === psd.width && psd.imageData.height === psd.height ? psd.imageData : null;
+  const d = comp ? to8(comp) : null;
+  let clear = 0, black = 0, n = 0;
+  if (comp) {
+    for (const { x, y } of cells.values()) for (const [cx, cy] of [[x + 1, y + 1], [x + frame.w - 2, y + 1], [x + 1, y + frame.h - 2], [x + frame.w - 2, y + frame.h - 2]]) {
+      const i = (cy * comp.width + cx) * 4;
+      n++;
+      if (d[i + 3] === 0) clear++; else if (!d[i] && !d[i + 1] && !d[i + 2]) black++;
+    }
+  }
+  const flat = n > 0 && clear >= n * 0.75;
+  // a sheet that never went through Photoshop has a blank flattened image: its layers are all there is
+  if (!flat && !(n > 0 && black === n)) notes.push(t('The flattened image in this file isn’t transparent letters (a visible background layer, or saved without Maximize Compatibility), so the letters were read from their layers, without layer styles and adjustments'));
+  const changes = [];
+  let unchanged = 0;
+  for (const [ch, { x, y }] of cells) {
+    let data;
+    if (flat) {
+      // this cell of the flattened image, as Photoshop shows it
+      data = new ImageData(frame.w, frame.h);
+      for (let r = 0; r < frame.h; r++) data.data.set(d.subarray(((y + r) * comp.width + x) * 4, ((y + r) * comp.width + x + frame.w) * 4), r * frame.w * 4);
+    } else {
+      const { L, clipped } = found.get(ch);
+      data = letterPixels(ch, L, clipped, frame.w, frame.h, x, y, notes);
+    }
+    const c = judge(font, frame, ch, data);
+    if (!c) { if (font.glyphs.get(ch)?.image) unchanged++; continue; }
+    const b = c.box;
+    if (b.l === 0 || b.t === 0 || b.r === frame.w - 1 || b.b === frame.h - 1) notes.push(t('“{c}” reaches the edge of its cell; anything beyond it was cut off', { c: ch }));
+    changes.push(c);
+  }
+  return { frame, changes, unchanged };
 }
 
 /** Same artwork, allowing for 8-bit rounding of half-transparent colours. */

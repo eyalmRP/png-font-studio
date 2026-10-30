@@ -175,7 +175,7 @@ function sheetHowTo(file) {
     '- Save with "Maximize Compatibility" on (Photoshop asks when saving). Without it the app can only read the',
     '  letter layers themselves, without styles and adjustments.',
     '',
-    'Back in PNG Font Studio: Fonts > Update from Photoshop, and pick the .psd (or this zip).',
+    'Back in PNG Font Studio: Fonts > Update from PSD, and pick the .psd (or this zip).',
     'Letters you did not change stay exactly as they were.',
     '',
   ].join('\n');
@@ -199,7 +199,7 @@ function howTo(base) {
     '- Grey empty layers are characters the font does not have yet: draw on them to add them.',
     '- Keep the canvas size, and keep the "PNG Font Studio frame" layer in the Guides group.',
     '',
-    'Back in PNG Font Studio: Fonts > Update from Photoshop, and pick the .psd (or this zip).',
+    'Back in PNG Font Studio: Fonts > Update from PSD, and pick the .psd (or this zip).',
     'Letters you did not change stay exactly as they were.',
     '',
   ].join('\n');
@@ -456,7 +456,7 @@ export async function updateFromPSD(font, file, { beforeUpdate, onApply }) {
     m.close();
   };
   const m = modal({
-    title: t('Update from Photoshop'), iconName: 'layers', class: 'modal-md', body,
+    title: t('Update from PSD'), iconName: 'layers', class: 'modal-md', body,
     actions: res.changes.length
       ? [button({ label: t('Cancel'), onClick: () => m.close() }),
         button({ label: t('Save as a new font'), kind: font.builtin ? 'primary' : '', onClick: () => apply(true) }),

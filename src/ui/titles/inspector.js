@@ -50,8 +50,8 @@ export function createInspector() {
   const body = h('div.panel-scroll');
   const el = h('div', { style: { display: 'flex', flexDirection: 'column', minHeight: 0, height: '100%' } }, head, body);
   const TABS = [
-    { id: 'character', icon: 'type', label: t('Character') },
-    { id: 'paragraph', icon: 'pilcrow', label: t('Paragraph') },
+    { id: 'character', icon: 'type', label: t('Character'), short: t('Text') },
+    { id: 'paragraph', icon: 'pilcrow', label: t('Paragraph'), short: t('Align') },
     { id: 'effects', icon: 'sparkles', label: t('Effects') },
     { id: 'warp', icon: 'waves', label: t('Warp') },
     { id: 'animate', icon: 'film', label: t('Animate') },
@@ -135,7 +135,7 @@ export function createInspector() {
     const resetChar = (keys) => () => { setChar(Object.fromEntries(keys.map((k) => [k, DEFAULT_CHAR[k]]))); refresh(); };
     const kernPills = pills({
       class: 'stretch', value: cs().kerning,
-      options: [{ value: 'optical', label: t('Optical') }, { value: 'metrics', label: t('Metrics') }, { value: 'none', label: '0' }],
+      options: [{ value: 'optical', label: t('Optical') }, { value: 'metrics', label: t('Metrics') }, { value: 'none', label: t('None') }],
       onChange: (v) => setChar({ kerning: v }),
     });
     reg(() => kernPills.setValue(cs().kerning));
@@ -343,15 +343,14 @@ export function createInspector() {
   function buildAnimate(layer) {
     const a = layer.anim;
     const setA = (fn, key) => { checkpoint('project', 'Animation', key); fn(layer.anim); projectChanged('render', layer); emit('anim'); };
+    // None on its own, then the presets under their category
     const presetGrid = (kind, src, cur, onPick) => {
-      const wrap = h('div', { style: { display: 'flex', flexDirection: 'column', gap: '8px' } });
-      const none = h('button.preset', { type: 'button', class: cur === 'none' ? 'on' : '', on: { click: () => onPick('none') } }, h('small', t('Off')), t('None'));
-      const cats = ['cute', 'cartoon', 'pro', 'fun'];
-      const grid = h('div.preset-grid', none);
-      for (const c of cats) for (const [id, p] of Object.entries(src)) if (p.cat === c) {
-        grid.appendChild(h('button.preset', { type: 'button', class: cur === id ? 'on' : '', title: t(ANIM_NAMES[id] || id), on: { click: () => onPick(id) } }, h('small', L(c)), t(ANIM_NAMES[id] || id)));
+      const card = (id, name) => h('button.preset', { type: 'button', class: cur === id ? 'on' : '', title: name, on: { click: () => onPick(id) } }, name);
+      const wrap = h('div.tool-group', h('div.preset-grid', card('none', t('None'))));
+      for (const c of ['cute', 'cartoon', 'pro', 'fun']) {
+        const ids = Object.keys(src).filter((id) => src[id].cat === c);
+        if (ids.length) wrap.append(h('div.tool-head', L(c)), h('div.preset-grid', ids.map((id) => card(id, t(ANIM_NAMES[id] || id)))));
       }
-      wrap.appendChild(grid);
       return wrap;
     };
     const playBtn = button({ label: t('Preview'), icon: 'play', kind: 'primary', onClick: () => emit('preview-layer', layer) });

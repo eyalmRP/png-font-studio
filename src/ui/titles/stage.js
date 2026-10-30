@@ -12,7 +12,7 @@ import {
 
 export function createStage() {
   const canvas = h('canvas.view', { 'aria-label': t('Title artboard'), tabIndex: 0 });
-  const ime = h('textarea.ime', { 'aria-label': t('Text input'), autocapitalize: 'off', autocomplete: 'off', autocorrect: 'off', spellcheck: false, inputmode: 'text', enterkeyhint: 'enter', rows: 1 });
+  const ime = h('textarea.ime', { 'aria-label': t('Text input'), tabIndex: -1, autocapitalize: 'off', autocomplete: 'off', autocorrect: 'off', spellcheck: false, inputmode: 'text', enterkeyhint: 'enter', rows: 1 });
   const zoomLabel = h('span.zoom-label', '100%');
   const toolBtns = {};
   const setTool = (tool) => { view.tool = tool; for (const [k, b] of Object.entries(toolBtns)) b.classList.toggle('on', k === tool); updateHint(); updateCursor(); };

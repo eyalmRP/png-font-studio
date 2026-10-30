@@ -104,7 +104,7 @@ export function mountFonts({ left, right, center, exportSlot }) {
     if (!file) return;
     try {
       await updateFromPSD(f, file, {
-        beforeUpdate: () => checkpoint('font:' + f.id, 'Update from Photoshop'),
+        beforeUpdate: () => checkpoint('font:' + f.id, 'Update from PSD'),
         onApply: (target, asNew) => {
           if (asNew) { addFont(target); saveFontRecord(target); toast(t('Created {name}', { name: target.name }), 'ok'); }
           else { fontChanged(target); emit('fonts'); toast(t('Updated {name}', { name: target.name }), 'ok'); }
@@ -166,7 +166,7 @@ export function mountFonts({ left, right, center, exportSlot }) {
       presetGrid, faceGrad, h('div.row', hueSw, h('div', { style: { flex: 1 } }, faceHue)), faceWidth, faceSoft, detectBtn);
     // range and softness pick the face for a custom gradient; a preset covers the whole design
     const syncFace = () => { for (const x of [faceWidth, faceSoft]) x.style.display = palette ? 'none' : ''; };
-    const modeP = pills({ class: 'stretch', value: mode, options: [{ value: 'face', label: t('Face colour') }, { value: 'hsl', label: t('Shift hue') }, { value: 'map', label: t('Gradient map') }], onChange: (v) => { mode = v; sync(); drawPrev(); } });
+    const modeP = pills({ class: 'stretch', value: mode, options: [{ value: 'face', label: t('Face'), title: t('Face colour') }, { value: 'hsl', label: t('Hue'), title: t('Shift hue') }, { value: 'map', label: t('Gradient'), title: t('Gradient map') }], onChange: (v) => { mode = v; sync(); drawPrev(); } });
     const sync = () => {
       for (const x of [hueF, satF, lightF]) x.style.display = mode === 'hsl' ? '' : 'none';
       grad.style.display = mode === 'map' ? '' : 'none';
@@ -243,8 +243,9 @@ export function mountFonts({ left, right, center, exportSlot }) {
   const sheetBar = h('div.sheet-bar', searchInput, filterSel, zoomF, guidesBtn, addBtn);
   const sheet = h('div.sheet', { role: 'grid', 'aria-label': t('Glyph sheet') });
   sheet.style.setProperty('--cell', state.ui.glyphZoom + 'px');
-  const wrap = h('div.sheet-wrap', testStrip, sheet);
-  const stagePane = h('div.stage', { style: { position: 'relative' } }, wrap, sheetBar);
+  // the toolbar sits in the scrolling area and sticks to its top, so it pushes the content down however many rows it wraps to
+  const wrap = h('div.sheet-wrap', sheetBar, testStrip, sheet);
+  const stagePane = h('div.stage', { style: { position: 'relative' } }, wrap);
   center.classList.add('no-bottom');
   center.append(stagePane);
 
@@ -532,14 +533,20 @@ export function mountFonts({ left, right, center, exportSlot }) {
       h('p.hint', t('{n} glyphs · units are source pixels', { n: glyphCount })),
       h('div.grid2', mf('capHeight', t('Cap height'), 'caseUpper'), mf('xHeight', t('x-height'), 'caseLower'), mf('ascender', t('Ascender'), 'spaceBefore'), mf('descender', t('Descender'), 'spaceAfter')),
       h('div.grid2', os, space),
-      h('div.tool-grid',
-        button({ label: t('Auto-place all'), icon: 'wand', onClick: remeasure }),
-        button({ label: t('Even out sizes'), icon: 'arrowsV', onClick: () => setM('Even out sizes', (fo) => { const ch = normalizeSizes(fo); autoMetrics(fo); toast(ch.length ? t('Resized {n} glyphs: {list}', { n: ch.length, list: ch.map((c) => c.char).join(' ') }) : t('Sizes are already even'), 'ok', 4000); }) }),
-        button({ label: t('Save font file'), icon: 'save', onClick: () => saveFontFile(font) }),
-        button({ label: t('Edit in Photoshop'), icon: 'layers', title: t('Every character on its own layer, stacked in one glyph box or laid out as a sheet'), onClick: (e) => psdMenu(e.currentTarget, font) }),
-        button({ label: t('Update from Photoshop'), icon: 'upload', title: t('Read an edited PSD back into this font, or into a new one'), onClick: () => importPSD(font) }),
-      ),
-      h('p.hint', t('Even out sizes fixes sheets where each cell was scaled to fill its box, keeping the optical overshoot of round letters.')));
+      h('div.tool-group',
+        h('div.tool-head', t('Placement')),
+        h('div.tool-grid',
+          button({ label: t('Auto-place all'), icon: 'wand', onClick: remeasure }),
+          button({ label: t('Even out sizes'), icon: 'arrowsV', onClick: () => setM('Even out sizes', (fo) => { const ch = normalizeSizes(fo); autoMetrics(fo); toast(ch.length ? t('Resized {n} glyphs: {list}', { n: ch.length, list: ch.map((c) => c.char).join(' ') }) : t('Sizes are already even'), 'ok', 4000); }) }),
+        ),
+        h('p.hint', t('Even out sizes fixes sheets where each cell was scaled to fill its box, keeping the optical overshoot of round letters.'))),
+      h('div.tool-group',
+        h('div.tool-head', t('Files')),
+        h('div.tool-grid',
+          button({ label: t('Save font file'), icon: 'save', class: 'span-all', onClick: () => saveFontFile(font) }),
+          button({ label: t('Export PSD'), icon: 'layers', title: t('Every character on its own layer, stacked in one glyph box or laid out as a sheet'), onClick: (e) => psdMenu(e.currentTarget, font) }),
+          button({ label: t('Update from PSD'), icon: 'upload', title: t('Read an edited PSD back into this font, or into a new one'), onClick: () => importPSD(font) }),
+        )));
   }
 
   function kerningSection(font, g) {

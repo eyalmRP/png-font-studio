@@ -36,7 +36,8 @@ export function numberField(o) {
   const decimals = o.decimals ?? (step < 1 ? Math.min(3, String(step).split('.')[1]?.length || 1) : 0);
   const sMin = o.sliderMin ?? (Number.isFinite(min) ? min : 0), sMax = o.sliderMax ?? (Number.isFinite(max) ? max : 100);
   let value = o.value;
-  const input = h('input.nf-input', { type: 'text', inputMode: 'decimal', spellcheck: false, 'aria-label': label || title || '' });
+  // iOS's decimal keypad has no minus key, so fields that go negative get the full keyboard
+  const input = h('input.nf-input', { type: 'text', inputMode: min < 0 ? 'text' : 'decimal', spellcheck: false, 'aria-label': label || title || '' });
   const up = h('button.nf-spin.nf-up', { type: 'button', tabIndex: -1, title: t('Increase') }, icon('chevronUp', 11));
   const down = h('button.nf-spin.nf-down', { type: 'button', tabIndex: -1, title: t('Decrease') }, icon('chevronDown', 11));
   const hasDef = o.def !== undefined && o.def !== null;
@@ -74,13 +75,14 @@ export function numberField(o) {
         const perPx = (o.scrubStep ?? step) * stepMul(ev) / 2;
         setLive(startV + Math.round(dx) * perPx, false);
       };
-      const upH = () => {
+      const upH = (ev) => {
         target.removeEventListener('pointermove', move);
         target.removeEventListener('pointerup', upH);
         target.removeEventListener('pointercancel', upH);
         el.classList.remove('scrubbing');
         if (moved) o.onChange && o.onChange(value);
-        else if (focusOnClick) { input.focus(); input.select(); }
+        // a cancel is the page taking the touch to scroll: no keyboard then
+        else if (focusOnClick && ev.type !== 'pointercancel') { input.focus(); input.select(); }
       };
       target.addEventListener('pointermove', move);
       target.addEventListener('pointerup', upH);
@@ -234,7 +236,7 @@ export function tabs(o) {
   const btns = o.tabs.map((tb) => h('button.tab', {
     type: 'button', role: 'tab', title: tb.label, 'aria-label': tb.label,
     on: { click: () => { value = tb.id; render(); o.onChange && o.onChange(tb.id); } },
-  }, icon(tb.icon, 16), o.compact ? null : h('span.tab-label', tb.label)));
+  }, icon(tb.icon, 16), o.compact ? null : h('span.tab-label', tb.short || tb.label)));
   const el = h('div.tabs', { role: 'tablist', class: o.class || '' }, btns);
   const render = () => btns.forEach((b, i) => { const on = o.tabs[i].id === value; b.classList.toggle('on', on); b.setAttribute('aria-selected', on); });
   el.setValue = (v) => { value = v; render(); };
@@ -448,7 +450,9 @@ export function splitter(o) {
     el.addEventListener('pointerup', upH);
   });
   el.addEventListener('keydown', (e) => {
-    const k = { ArrowLeft: -16, ArrowRight: 16, ArrowUp: -16, ArrowDown: 16 }[e.key];
+    let k = { ArrowLeft: -16, ArrowRight: 16, ArrowUp: -16, ArrowDown: 16 }[e.key];
+    // mirrored like the drag above, so the arrow moves the divider the way it points
+    if (k && o.orient === 'v' && document.documentElement.dir === 'rtl') k = -k;
     if (k) { e.preventDefault(); o.set(clamp(o.get() + (o.invert ? -k : k), o.min, o.max)); o.done && o.done(); }
   });
   return el;

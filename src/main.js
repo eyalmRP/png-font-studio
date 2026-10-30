@@ -13,23 +13,26 @@ import { on } from './app/store.js';
 // Bump BUILTIN_VERSION when the built-in fonts change: a library from an older version gets them replaced.
 const BUILTIN_VERSION = 3;
 const BUILTIN = [
-  { id: 'builtin-bubble-blue', file: 'fonts/bubble-blue.zip', key: 'bubble-blue', order: 0 },
+  // the font package travels as base64 inside JSON: the claude.ai page host serves .json but not .zip
+  { id: 'builtin-bubble-blue', file: 'fonts/bubble-blue.json', key: 'bubble-blue', order: 0 },
   // colour variants are made from Bubble Blue when the app loads (one font file to download)
   { id: 'builtin-bubble-orange', from: 'builtin-bubble-blue', face: 'Orange', name: 'Bubble Orange', order: 1 },
   { id: 'builtin-bubble-pearl', from: 'builtin-bubble-blue', face: 'Pearl', name: 'Bubble Pearl', order: 2 },
 ];
 
+function fromBase64(s) {
+  const bin = atob(s);
+  const out = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out;
+}
+
 async function builtinBytes(b) {
   const embedded = window.__PFS_FONTS__ && window.__PFS_FONTS__[b.key];
-  if (embedded) {
-    const bin = atob(embedded);
-    const out = new Uint8Array(bin.length);
-    for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
-    return out;
-  }
+  if (embedded) return fromBase64(embedded);
   const res = await fetch(b.file);
   if (!res.ok) throw new Error(`Could not load ${b.file}`);
-  return new Uint8Array(await res.arrayBuffer());
+  return fromBase64((await res.json()).zip);
 }
 
 export async function loadBuiltins({ save = true } = {}) {

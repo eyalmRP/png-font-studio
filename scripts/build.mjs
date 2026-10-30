@@ -25,7 +25,8 @@ async function build() {
   const bodyStart = '<div id="app"></div>';
   fs.rmSync(path.join(dist, 'artifact/fonts'), { recursive: true, force: true });
   fs.mkdirSync(path.join(dist, 'artifact/fonts'), { recursive: true });
-  for (const f of ['bubble-blue.zip']) fs.copyFileSync(path.join(root, 'assets/fonts', f), path.join(dist, 'artifact/fonts', f));
+  // the page host serves .json but not .zip, so the font package ships as base64 inside JSON
+  for (const k of ['bubble-blue']) fs.writeFileSync(path.join(dist, 'artifact/fonts', k + '.json'), JSON.stringify({ zip: fs.readFileSync(path.join(root, 'assets/fonts', k + '.zip')).toString('base64') }));
   fs.writeFileSync(path.join(dist, 'artifact/index.html'), `${head}\n${bodyStart}\n<script>${js}</script>\n`);
   const embed = {};
   for (const k of ['bubble-blue']) embed[k] = fs.readFileSync(path.join(root, 'assets/fonts', k + '.zip')).toString('base64');

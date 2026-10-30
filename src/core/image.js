@@ -590,10 +590,12 @@ export function recolorRange(data, range, stops, amount = 1) {
   const { hue, width = 40, soft = 25, minSat = 0.15 } = range;
   for (let i = 0; i < data.length; i += 4) {
     if (!data[i + 3]) continue;
-    const [h, s] = rgbToHsl(data[i], data[i + 1], data[i + 2]);
+    const [h] = rgbToHsl(data[i], data[i + 1], data[i + 2]);
     let d = Math.abs(h * 360 - hue); if (d > 180) d = 360 - d;
     let w = d <= width ? 1 : d >= width + soft ? 0 : 1 - (d - width) / soft;
-    w *= Math.min(1, Math.max(0, (s - minSat) / 0.15));
+    // colourfulness as chroma: HSL saturation is misleadingly high for near-white highlights
+    const chroma = (Math.max(data[i], data[i + 1], data[i + 2]) - Math.min(data[i], data[i + 1], data[i + 2])) / 255;
+    w *= Math.min(1, Math.max(0, (chroma - minSat) / 0.15));
     if (w <= 0) continue;
     w *= amount;
     // key on perceived brightness, not HSL lightness: saturated cyan and blue share 50% lightness

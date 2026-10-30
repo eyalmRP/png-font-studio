@@ -82,6 +82,28 @@ export function typeText(text) {
   edited(layer);
 }
 
+/**
+ * Replace a layer's whole text from a plain text box. Only the changed middle part is replaced, so characters
+ * that stay keep their own styles and new ones take the style of their neighbour.
+ */
+export function setLayerText(layer, text) {
+  if (!layer) return;
+  const doc = layer.doc, old = doc.chars, nw = [...text.replace(/\r\n?/g, '\n')];
+  let a = 0;
+  while (a < old.length && a < nw.length && old[a] === nw[a]) a++;
+  let b = 0;
+  while (b < old.length - a && b < nw.length - a && old[old.length - 1 - b] === nw[nw.length - 1 - b]) b++;
+  if (a === old.length && a === nw.length) return;
+  checkpoint('project', 'Typing', 'box:' + layer.id);
+  const style = old.length ? (a > 0 ? doc.styles[a - 1] : doc.styles[0]) : doc.typing;
+  deleteRange(doc, a, old.length - b);
+  const end = nw.length > a + b ? insertText(doc, a, nw.slice(a, nw.length - b).join(''), style) : a;
+  const e = state.edit;
+  if (e && e.layerId === layer.id) { e.caret = e.anchor = end; e.goalX = null; }
+  if (layer.name === 'Text' || layer.autoName) { layer.name = doc.chars.join('').split('\n')[0].slice(0, 24) || 'Text'; layer.autoName = true; }
+  edited(layer);
+}
+
 export function deleteText(dir, word = false) {
   const layer = selectedLayer();
   const e = state.edit;

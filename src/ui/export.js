@@ -41,7 +41,7 @@ export async function openExport() {
       const disabled = f.standaloneOnly && !standalone;
       return h('button.export-card', {
         type: 'button', class: opts.format === f.id ? 'on' : '', disabled,
-        title: disabled ? t('claude.ai only lets a page save MOV files it made itself through its own film export. Open the standalone app (index.html from the repository) to export MOV.') : '',
+        title: disabled ? t('Pages inside claude.ai can’t save MOV files they make themselves. Use WebM for video with transparency, or export MOV from the standalone version of PNG Font Studio (png-font-studio.html), which runs offline in your browser.') : '',
         on: { click: () => { opts.format = f.id; render(); } },
       }, h('b', t(f.label)), h('span', disabled ? t('Available in the standalone app') : t(f.desc)));
     }));

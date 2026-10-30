@@ -17,7 +17,7 @@ import { DEFAULT_WARP } from '../../core/warp.js';
 import { drawGlyphOnGuides, css } from './glyphview.js';
 import { openImporter, charFromFilename } from './importer.js';
 import { decodeImage, fontToZip, fontFromZipBytes, saveFile, safeName } from '../../storage/files.js';
-import { FACE_PRESETS, dominantHue } from '../../core/recolor.js';
+import { FACE_PRESETS, dominantHue, paletteFromStops, resolvePalette, remapPalette } from '../../core/recolor.js';
 import { saveFontRecord, deleteFontRecord } from '../../storage/library.js';
 import { drawSample } from '../sample.js';
 
@@ -107,16 +107,24 @@ export function mountFonts({ left, right, center, exportSlot }) {
     let face = { hue: 205, width: 38, soft: 30 };
     let faceStops = FACE_PRESETS[0].stops.map((x) => ({ ...x }));
     let presetName = FACE_PRESETS[0].name;
+    // a preset recolours the whole design band by band; editing the gradient switches to the face only
+    let palette = FACE_PRESETS[0].palette || paletteFromStops(FACE_PRESETS[0].stops);
+    let resolved = null; // palette measured against the current font and face hue
+    const anchorsFor = (f) => {
+      const key = `${f.id}:${f.rev}:${face.hue}`;
+      if (!resolved || resolved.key !== key || resolved.palette !== palette) resolved = { key, palette, anchors: resolvePalette(f, palette, face.hue) };
+      return resolved.anchors;
+    };
     const preview = h('canvas');
     const hueF = numberField({ label: t('Hue'), min: -180, max: 180, unit: '°', slider: true, value: hue, onInput: (v) => { hue = v; drawPrev(); }, onChange: () => {} });
     const satF = numberField({ label: t('Saturation'), min: -100, max: 100, unit: '%', slider: true, value: sat, onInput: (v) => { sat = v; drawPrev(); }, onChange: () => {} });
     const lightF = numberField({ label: t('Lightness'), min: -100, max: 100, unit: '%', slider: true, value: light, onInput: (v) => { light = v; drawPrev(); }, onChange: () => {} });
     const grad = gradientField({ stops, onInput: (v) => { stops = v; drawPrev(); }, onChange: (v) => { stops = v; drawPrev(); } });
     // face mode controls
-    const faceGrad = gradientField({ stops: faceStops, onInput: (v) => { faceStops = v; presetName = t('Custom'); drawPrev(); }, onChange: (v) => { faceStops = v; drawPrev(); } });
+    const faceGrad = gradientField({ stops: faceStops, onInput: (v) => { faceStops = v; presetName = t('Custom'); palette = null; syncFace(); drawPrev(); }, onChange: (v) => { faceStops = v; drawPrev(); } });
     const presetGrid = h('div.preset-grid', FACE_PRESETS.map((pr) => h('button.preset', {
       type: 'button', title: t(pr.name),
-      on: { click: (e) => { faceStops = pr.stops.map((x) => ({ ...x })); presetName = t(pr.name); faceGrad.setValue(faceStops); for (const b of presetGrid.children) b.classList.toggle('on', b === e.currentTarget); drawPrev(); } },
+      on: { click: (e) => { faceStops = pr.stops.map((x) => ({ ...x })); presetName = t(pr.name); palette = pr.palette || paletteFromStops(pr.stops); faceGrad.setValue(faceStops); for (const b of presetGrid.children) b.classList.toggle('on', b === e.currentTarget); syncFace(); drawPrev(); } },
     }, h('span', { style: { display: 'block', height: '14px', borderRadius: '4px', background: `linear-gradient(90deg, ${pr.stops.map((x) => x.color).join(', ')})` } }), t(pr.name))));
     presetGrid.firstChild.classList.add('on');
     const faceHue = numberField({ label: t('Face colour'), iconName: 'pipette', min: 0, max: 360, unit: '°', slider: true, value: face.hue, title: t('The colour of the letter face to replace'), onInput: (v) => { face.hue = v; swatch(); drawPrev(); }, onChange: () => {} });
@@ -127,6 +135,8 @@ export function mountFonts({ left, right, center, exportSlot }) {
     const detectBtn = button({ label: t('Find face colour'), icon: 'wand', onClick: () => { const f = currentFont(); if (f) { face.hue = dominantHue(f); faceHue.setValue(face.hue); swatch(); drawPrev(); } } });
     const faceBox = h('div', { style: { display: 'flex', flexDirection: 'column', gap: '10px' } },
       presetGrid, faceGrad, h('div.row', hueSw, h('div', { style: { flex: 1 } }, faceHue)), faceWidth, faceSoft, detectBtn);
+    // range and softness pick the face for a custom gradient; a preset covers the whole design
+    const syncFace = () => { for (const x of [faceWidth, faceSoft]) x.style.display = palette ? 'none' : ''; };
     const modeP = pills({ class: 'stretch', value: mode, options: [{ value: 'face', label: t('Face colour') }, { value: 'hsl', label: t('Shift hue') }, { value: 'map', label: t('Gradient map') }], onChange: (v) => { mode = v; sync(); drawPrev(); } });
     const sync = () => {
       for (const x of [hueF, satF, lightF]) x.style.display = mode === 'hsl' ? '' : 'none';
@@ -135,7 +145,8 @@ export function mountFonts({ left, right, center, exportSlot }) {
     };
     const recolor = (img) => {
       const out = cloneImage(img);
-      if (mode === 'face') recolorRange(out.data, face, faceStops.map((x) => ({ pos: x.pos, color: hexToRgb(x.color) })));
+      if (mode === 'face' && palette) remapPalette(out.data, face.hue, anchorsFor(currentFont()));
+      else if (mode === 'face') recolorRange(out.data, face, faceStops.map((x) => ({ pos: x.pos, color: hexToRgb(x.color) })));
       else if (mode === 'hsl') adjustHsl(out.data, hue, sat / 100, light / 100);
       else gradientMap(out.data, stops.map((x) => ({ pos: x.pos, color: hexToRgb(x.color) })), 1);
       return out;
@@ -161,17 +172,18 @@ export function mountFonts({ left, right, center, exportSlot }) {
         target = cloneFont(f, name);
         target.family = f.family || f.name;
       } else checkpoint('font:' + f.id, 'Recolour font');
+      if (mode === 'face' && palette) anchorsFor(f); // measure on the source font before the copy changes
       for (const g of target.glyphs.values()) if (g.image) { g.image = recolor(g.image); g.rev++; }
       touch(target);
       if (asNew) { addFont(target); saveFontRecord(target); toast(t('Created {name}', { name: target.name }), 'ok'); }
       else { fontChanged(target); emit('fonts'); }
     };
-    sync(); swatch();
+    sync(); swatch(); syncFace();
     offs.push(on('fonts', () => { const f = currentFont(); if (f && f.id !== lastFontId) { lastFontId = f.id; face.hue = dominantHue(f); faceHue.setValue(face.hue); swatch(); } drawPrev(); }));
     let lastFontId = null;
     setTimeout(() => { const f = currentFont(); if (f) { lastFontId = f.id; face.hue = dominantHue(f); faceHue.setValue(face.hue); swatch(); } drawPrev(); }, 50);
     return section({ id: 'fonts-recolor', title: t('Colour variants'), iconName: 'palette', open: false },
-      h('p.hint', t('Make a new colour version of the whole font from its artwork, no new sheets needed. Face colour changes only the letter face and keeps the 3D base, outline and shine.')),
+      h('p.hint', t('Make a new colour version of the whole font from its artwork, no new sheets needed. A preset recolours the face, rim and 3D depth together; editing the gradient changes only the letter face.')),
       modeP, faceBox, hueF, satF, lightF, grad, preview,
       h('div.row-ctl', button({ label: t('Create variant'), icon: 'plus', kind: 'primary', onClick: () => make(true) }), button({ label: t('Apply to this font'), icon: 'brush', onClick: () => make(false) })));
   }

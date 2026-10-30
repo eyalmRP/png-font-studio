@@ -94,7 +94,7 @@ export const HE = {
   'Choose image': 'בחירת תמונה',
   'Choose…': 'בחירה…',
   'Circle': 'עיגול',
-  'claude.ai only lets a page save MOV files it made itself through its own film export. Open the standalone app (index.html from the repository) to export MOV.': 'ב־claude.ai דף יכול לשמור קובצי MOV רק דרך ייצוא הסרטים של claude.ai עצמו. כדי לייצא MOV, פתחו את האפליקציה העצמאית (index.html מהמאגר).',
+  'Pages inside claude.ai can’t save MOV files they make themselves. Use WebM for video with transparency, or export MOV from the standalone version of PNG Font Studio (png-font-studio.html), which runs offline in your browser.': 'דפים בתוך claude.ai לא יכולים לשמור קובצי MOV שהם יוצרים בעצמם. השתמשו ב־WebM לווידאו עם שקיפות, או ייצאו MOV מהגרסה העצמאית של PNG Font Studio (‏png-font-studio.html), שרצה בדפדפן גם בלי אינטרנט.',
   'Clean specks': 'ניקוי כתמים',
   'Clean-up': 'ניקוי',
   'Clear glyph': 'ניקוי הגליף',
@@ -301,7 +301,7 @@ export const HE = {
   'Loop forever': 'לולאה אינסופית',
   'Lowercase': 'אותיות קטנות',
   'Luminosity': 'בהירות',
-  'Make a new colour version of the whole font from its artwork, no new sheets needed. Face colour changes only the letter face and keeps the 3D base, outline and shine.': 'יצירת גרסת צבע חדשה של כל הגופן מתוך האיורים שלו, בלי גיליונות חדשים. צבע הפנים משנה רק את פני האותיות ושומר על הבסיס התלת־ממדי, קו המתאר והברק.',
+  'Make a new colour version of the whole font from its artwork, no new sheets needed. A preset recolours the face, rim and 3D depth together; editing the gradient changes only the letter face.': 'יצירת גרסת צבע חדשה של כל הגופן מתוך האיורים שלו, בלי גיליונות חדשים. ערכה מוכנה צובעת יחד את הפנים, השוליים והעומק התלת־ממדי; עריכת מעבר הצבע משנה רק את פני האותיות.',
   'Measuring…': 'מודד…',
   'Metrics': 'מטריקות',
   'Mirror': 'מראה',
@@ -594,4 +594,5 @@ export const HE = {
   'claude.ai does not allow saving .{ext} files here': 'ב־claude.ai אי אפשר לשמור כאן קובצי ‎.{ext}',
   'MOV files made in the page cannot be saved inside claude.ai. Use WebM or PNG sequence, or open the standalone app.': 'אי אפשר לשמור ב־claude.ai קובצי MOV שנוצרו בדף. השתמשו ב־WebM או ברצף PNG, או פתחו את האפליקציה העצמאית.',
   'Saving failed': 'השמירה נכשלה',
+  'Type the title text': 'הקלידו את טקסט הכותרת',
 };

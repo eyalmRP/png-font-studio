@@ -3,7 +3,7 @@ import { h, clear, icon, storeSet } from '../dom.js';
 import { t } from '../i18n.js';
 import { numberField, angleField, pills, toggle, section, tabs, select, button, iconButton, colorField, gradientField, menu } from '../controls.js';
 import { state, on, emit, selectedLayer, checkpoint, projectChanged, newEffect, getFont } from '../../app/store.js';
-import { currentCharStyle, currentParaStyle, setChar, setPara, isCollapsedEdit } from '../../app/textedit.js';
+import { currentCharStyle, currentParaStyle, setChar, setPara, isCollapsedEdit, setLayerText, exitEdit } from '../../app/textedit.js';
 import { EFFECTS, EFFECT_ORDER, BLEND_MODES, STYLE_PRESETS } from '../../core/effects-def.js';
 import { WARP_STYLES, warpPoint, DEFAULT_WARP } from '../../core/warp.js';
 import { IN_PRESETS, OUT_PRESETS, LOOP_PRESETS, ORDERS } from '../../core/anim.js';
@@ -89,6 +89,13 @@ export function createInspector() {
   // ---------- character ----------
   function buildCharacter(layer) {
     const cs = () => currentCharStyle(layer) || {};
+    // a plain text box: the same text as on the stage, for long edits, pasting, or typing on a phone
+    const box = h('textarea.text-area.title-text', {
+      rows: 3, dir: 'auto', 'aria-label': t('Text'), placeholder: t('Type the title text'),
+      on: { input: (e) => setLayerText(layer, e.target.value), focus: () => { if (state.edit) exitEdit(); }, keydown: (e) => e.stopPropagation() },
+    });
+    reg(() => { if (document.activeElement !== box) box.value = layer.doc.chars.join(''); });
+    body.appendChild(section({ id: 'ch-text', title: t('Text'), iconName: 'type' }, box));
     const fontSel = select({
       label: t('Font'), iconName: 'type', value: cs().font || state.fontOrder[0],
       options: state.fontOrder.map((id) => ({ value: id, label: state.fonts.get(id)?.name || id })),

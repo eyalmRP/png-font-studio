@@ -11,7 +11,7 @@ import { startAutosave } from './ui/projectio.js';
 import { on } from './app/store.js';
 
 // Bump BUILTIN_VERSION when the built-in fonts change: a library from an older version gets them replaced.
-const BUILTIN_VERSION = 3;
+const BUILTIN_VERSION = 4;
 const BUILTIN = [
   // the font package travels as base64 inside JSON: the claude.ai page host serves .json but not .zip
   { id: 'builtin-bubble-blue', file: 'fonts/bubble-blue.json', key: 'bubble-blue', order: 0 },

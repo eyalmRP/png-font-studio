@@ -160,6 +160,8 @@ button { cursor: pointer; }
 .sel-label { display: flex; align-items: center; gap: 5px; color: var(--muted); font-size: 12px; }
 .text-input { height: 30px; border-radius: var(--r-sm); border: 1px solid var(--line); background: var(--field); padding: 0 10px; width: 100%; }
 .text-area { border-radius: var(--r-sm); border: 1px solid var(--line); background: var(--field); padding: 8px 10px; width: 100%; resize: vertical; font-family: var(--font-num); }
+/* 16px keeps phones from zooming in when the box gets focus */
+.title-text { font-family: var(--font-ui); font-size: 16px; line-height: 1.4; min-height: 64px; }
 .field { display: flex; flex-direction: column; gap: 6px; }
 .field > span { color: var(--muted); font-size: 12px; }
 

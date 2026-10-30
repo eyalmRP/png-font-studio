@@ -12,7 +12,7 @@ import {
 
 export function createStage() {
   const canvas = h('canvas.view', { 'aria-label': t('Title artboard'), tabIndex: 0 });
-  const ime = h('textarea.ime', { 'aria-label': t('Text input'), autocapitalize: 'off', autocomplete: 'off', spellcheck: false, rows: 1 });
+  const ime = h('textarea.ime', { 'aria-label': t('Text input'), autocapitalize: 'off', autocomplete: 'off', autocorrect: 'off', spellcheck: false, inputmode: 'text', enterkeyhint: 'enter', rows: 1 });
   const zoomLabel = h('span.zoom-label', '100%');
   const toolBtns = {};
   const setTool = (tool) => { view.tool = tool; for (const [k, b] of Object.entries(toolBtns)) b.classList.toggle('on', k === tool); updateHint(); updateCursor(); };
@@ -346,10 +346,12 @@ export function createStage() {
         focusIme();
         return;
       }
+      // on a touch screen, tapping the selected title again starts editing it (double-tap is awkward there)
+      const tapEdit = ev.pointerType === 'touch' && selectedLayer() === hit && !hit.locked;
       selectLayer(hit.id);
       if (!hit.locked) {
         const p = toArtboard(cx, cy);
-        drag = { type: 'move', layer: hit, sx: p.x, sy: p.y, lx: hit.x, ly: hit.y, moved: false };
+        drag = { type: 'move', layer: hit, sx: p.x, sy: p.y, lx: hit.x, ly: hit.y, moved: false, tapEdit, touch: ev.pointerType === 'touch' };
       }
     } else {
       selectLayer(null);
@@ -383,6 +385,8 @@ export function createStage() {
     const p = toArtboard(cx, cy);
     const L = drag.layer;
     if (drag.type === 'move') {
+      // a small dead zone, so a tap (fingers wobble) neither nudges the layer nor cancels tap-to-edit
+      if (!drag.moved && Math.hypot(p.x - drag.sx, p.y - drag.sy) * view.zoom < (drag.touch ? 8 : 3)) return;
       let nx = drag.lx + p.x - drag.sx, ny = drag.ly + p.y - drag.sy;
       if (ev.shiftKey) { if (Math.abs(p.x - drag.sx) > Math.abs(p.y - drag.sy)) ny = drag.ly; else nx = drag.lx; }
       // snap the anchor to the artboard centre lines
@@ -445,12 +449,21 @@ export function createStage() {
   });
 
   const endDrag = (ev) => {
+    if (drag && drag.type === 'move' && drag.tapEdit && !drag.moved && ev.type === 'pointerup') {
+      const r = canvas.getBoundingClientRect();
+      enterEdit(drag.layer.id, textPosAt(drag.layer, ev.clientX - r.left, ev.clientY - r.top));
+      focusIme();
+      drag = null;
+      return;
+    }
     if (drag && drag.type === 'pan') updateCursor();
     if (drag && (drag.type === 'scale' || drag.type === 'rotate' || drag.type === 'move')) emit('selection');
     drag = null;
     void ev;
   };
   canvas.addEventListener('pointerup', endDrag);
+  // a tap that lands in the text being edited must focus inside the tap for the phone keyboard to open
+  canvas.addEventListener('click', () => { if (state.edit && document.activeElement !== ime) focusIme(); });
   canvas.addEventListener('pointercancel', endDrag);
   canvas.addEventListener('pointerleave', () => { if (view.hover) { view.hover = null; request(); } });
 
@@ -482,15 +495,42 @@ export function createStage() {
   }
 
   // ---------- keyboard / IME ----------
-  function focusIme() { setTimeout(() => ime.focus({ preventScroll: true }), 0); }
-  let composing = false;
-  ime.addEventListener('compositionstart', () => { composing = true; });
-  ime.addEventListener('compositionend', (e) => { composing = false; if (e.data) typeText(e.data); ime.value = ''; });
-  ime.addEventListener('input', () => {
-    if (composing) return;
-    const v = ime.value;
-    ime.value = '';
+  // Phones open their keyboard only when focus happens inside the tap itself, so focus right away (and again
+  // after the event, in case the tap moved focus). The hidden field keeps one invisible character before the
+  // caret: a phone keyboard's Backspace on an empty field sends nothing at all.
+  const SENT = '\u200b';
+  function resetIme() { ime.value = SENT; try { ime.setSelectionRange(1, 1); } catch { /* not focused */ } }
+  function focusIme() {
+    ime.focus({ preventScroll: true });
+    if (!composing) resetIme();
+    setTimeout(() => { if (state.edit && document.activeElement !== ime) { ime.focus({ preventScroll: true }); if (!composing) resetIme(); } }, 0);
+  }
+  // Android keyboards send the word being typed as a composition: show it live, then commit it
+  let composing = false, compLen = 0;
+  const unSent = (v) => v.split(SENT).join('');
+  const removeTyped = (n) => { for (let i = 0; i < n; i++) deleteText(-1); };
+  ime.addEventListener('compositionstart', () => { composing = true; compLen = 0; });
+  ime.addEventListener('compositionend', (e) => {
+    composing = false;
+    removeTyped(compLen);
+    compLen = 0;
+    const v = e.data ?? unSent(ime.value);
     if (v) typeText(v.replace(/\r\n?/g, '\n'));
+    resetIme();
+  });
+  ime.addEventListener('input', (e) => {
+    if (!state.edit) { resetIme(); return; }
+    const v = ime.value;
+    if (composing) {
+      const live = unSent(v);
+      removeTyped(compLen);
+      if (live) typeText(live);
+      compLen = [...live].length;
+      return;
+    }
+    if (!v.startsWith(SENT) && (e.inputType || '').startsWith('delete')) deleteText(-1, e.inputType === 'deleteWordBackward');
+    else { const add = unSent(v); if (add) typeText(add.replace(/\r\n?/g, '\n')); }
+    resetIme();
   });
   ime.addEventListener('paste', (e) => {
     e.preventDefault();

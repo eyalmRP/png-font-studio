@@ -604,3 +604,52 @@ export function recolorRange(data, range, stops, amount = 1) {
   }
   return data;
 }
+
+/**
+ * Flat background colour of a sheet (most common colour along the border), or null when the border is
+ * transparent or not a single flat colour.
+ */
+export function detectBackground(img) {
+  const { width: W, height: H, data } = img;
+  const buckets = new Map();
+  let total = 0, transparent = 0;
+  const visit = (x, y) => {
+    const i = (y * W + x) * 4;
+    total++;
+    if (data[i + 3] < 128) { transparent++; return; }
+    const key = ((data[i] >> 3) << 10) | ((data[i + 1] >> 3) << 5) | (data[i + 2] >> 3);
+    const b = buckets.get(key) || { n: 0, r: 0, g: 0, b: 0 };
+    b.n++; b.r += data[i]; b.g += data[i + 1]; b.b += data[i + 2];
+    buckets.set(key, b);
+  };
+  for (let x = 0; x < W; x += 2) { visit(x, 0); visit(x, 1); visit(x, H - 1); visit(x, H - 2); }
+  for (let y = 0; y < H; y += 2) { visit(0, y); visit(1, y); visit(W - 1, y); visit(W - 2, y); }
+  if (transparent > total * 0.4) return null;
+  let best = null;
+  for (const b of buckets.values()) if (!best || b.n > best.n) best = b;
+  if (!best || best.n < total * 0.45) return null;
+  return [Math.round(best.r / best.n), Math.round(best.g / best.n), Math.round(best.b / best.n)];
+}
+
+/**
+ * Remove a flat background colour (chroma key). Pixels near the colour become transparent; edge pixels get
+ * partial alpha and the background colour is un-mixed from them so no green or magenta fringe remains.
+ */
+export function removeBackgroundColor(img, color, { tolerance = 60, softness = 150 } = {}) {
+  const out = cloneImage(img);
+  const d = out.data;
+  const [br, bg, bb] = color;
+  for (let i = 0; i < d.length; i += 4) {
+    if (!d[i + 3]) continue;
+    const dist = Math.hypot(d[i] - br, d[i + 1] - bg, d[i + 2] - bb);
+    if (dist <= tolerance) { d[i] = d[i + 1] = d[i + 2] = d[i + 3] = 0; continue; }
+    if (dist >= tolerance + softness) continue;
+    const a = (dist - tolerance) / softness;
+    // un-mix: observed = a·fg + (1 − a)·bg
+    d[i] = Math.min(255, Math.max(0, (d[i] - (1 - a) * br) / a));
+    d[i + 1] = Math.min(255, Math.max(0, (d[i + 1] - (1 - a) * bg) / a));
+    d[i + 2] = Math.min(255, Math.max(0, (d[i + 2] - (1 - a) * bb) / a));
+    d[i + 3] = Math.round(d[i + 3] * a);
+  }
+  return out;
+}

@@ -3,8 +3,10 @@ import { h, clear, icon, pickFiles, storeGet, storeSet, rafThrottle } from '../d
 import { t } from '../i18n.js';
 import { modal, button, numberField, pills, toggle, select, toast, section } from '../controls.js';
 import { state, addFont, emit, checkpoint, fontChanged } from '../../app/store.js';
-import { detectGrid, uniformGrid, extractGlyphs, guessGridCount, cleanupAlpha, trimImage } from '../../core/image.js';
-import { LAYOUTS, parseMapping, mappingToString } from '../../core/charsets.js';
+import { detectGrid, uniformGrid, extractGlyphs, guessGridCount, cleanupAlpha, trimImage, detectBackground, removeBackgroundColor } from '../../core/image.js';
+import { LAYOUTS, PROMPT_LAYOUTS, parseMapping, mappingToString } from '../../core/charsets.js';
+
+const ALL_LAYOUTS = [...PROMPT_LAYOUTS, ...LAYOUTS];
 import { createFont, setGlyph, autoMetrics, normalizeSizes, rankLayouts, suggestChars } from '../../core/font.js';
 import { decodeImage } from '../../storage/files.js';
 import { saveFontRecord } from '../../storage/library.js';
@@ -73,19 +75,22 @@ export async function openImporter(initialFiles) {
     status.textContent = t('Reading {n} files…', { n: files.length });
     for (const file of files) {
       try {
-        const img = await decodeImage(file);
+        const orig = await decodeImage(file);
+        // a flat green/magenta background (used when transparency fails) is keyed out automatically
+        const bg = detectBackground(orig);
+        const img = bg && opts.keyBackground !== false ? removeBackgroundColor(orig, bg) : orig;
         const big = img.width >= 400 && img.height >= 400;
         const gx = guessGridCount(img, 'x'), gy = guessGridCount(img, 'y');
         const isSheet = big && ((gx && gx > 1) || (gy && gy > 1) || (img.width >= 800 && img.height >= 800));
         if (isSheet) {
           const cols = gx && gx > 1 ? gx : 6, rows = gy && gy > 1 ? gy : cols;
-          const it = { file, img, kind: 'sheet', rows, cols };
+          const it = { file, img, orig, bg, kind: 'sheet', rows, cols };
           items.push(it);
           await processSheet(it, true);
         } else {
           const cleaned = cleanupAlpha(img, { low: 8, high: 120, minArea: 8 }).image;
           const tr = trimImage(cleaned, 0, 1);
-          items.push({ file, img, kind: 'single', single: { image: tr.empty ? null : tr.image, char: charFromFilename(file.name) } });
+          items.push({ file, img, orig, bg, kind: 'single', single: { image: tr.empty ? null : tr.image, char: charFromFilename(file.name) } });
         }
       } catch (e) { toast(`${file.name}: ${e.message}`, 'error', 5000); }
     }
@@ -108,6 +113,12 @@ export async function openImporter(initialFiles) {
     return null;
   }
 
+  /** Index of this sheet's size-reference H (a cell only used to match sizes between sheets), or -1. */
+  function refIndexOf(it) {
+    const L = it.layout;
+    return L && L.ref !== undefined && it.chars && it.chars[L.ref] === 'H' ? L.ref : -1;
+  }
+
   async function processSheet(it, recognise) {
     it.grid = it.gridManual || detectGrid(it.img, { rows: it.rows, cols: it.cols });
     // shapes are assigned to cells by their centre, so glyphs crossing a grid line stay whole
@@ -116,19 +127,22 @@ export async function openImporter(initialFiles) {
       it.chars = it.cells.map(() => null);
       const n = it.cells.length;
       const ref = refFont();
-      const candidates = LAYOUTS.filter((L) => L.chars.length === n);
+      const candidates = ALL_LAYOUTS.filter((L) => L.chars.length === n);
+      it.recog = null;
       if (ref && candidates.length) {
         const ranked = rankLayouts(it.cells.map((c) => c.image), ref, candidates);
-        if (ranked[0] && ranked[0].score < 0.12) {
+        // accept a clear winner: a close match, or one much better than the runner-up (a new design differs in detail)
+        if (ranked[0] && (ranked[0].score < 0.12 || (ranked[1] && ranked[0].score < ranked[1].score * 0.7))) {
           it.chars = [...ranked[0].layout.chars];
+          it.layout = ranked[0].layout;
           it.recog = { name: ranked[0].layout.name, score: ranked[0].score, from: ref.name };
         }
       }
       if (!it.recog) {
-        // fall back to the built-in layouts in order (sheet 1, 2, 3, 4) when the count matches
-        const idx = items.filter((x) => x.kind === 'sheet').indexOf(it);
-        const L = candidates[idx] || candidates[0];
-        if (L) it.chars = [...L.chars];
+        // fall back to the layouts in order (prompt sheet 1, 2, 3 … or bubble sheet 1, 2 …) for sheets with this many cells
+        const idx = items.filter((x) => x.kind === 'sheet' && x.cells && x.cells.length === n).indexOf(it);
+        const L = candidates[Math.max(0, idx)] || candidates[0];
+        if (L) { it.chars = [...L.chars]; it.layout = L; }
       }
       it.cells.forEach((c, i) => { if (c.empty) it.chars[i] = null; });
     }
@@ -256,7 +270,8 @@ export async function openImporter(initialFiles) {
         const s = suggestChars(cell.image, ref, 1)[0];
         low = s && s.char !== it.chars[i] && it.recog;
       }
-      const box = h('div.imp-cell', { class: (!it.chars[i] ? 'skip ' : '') + (low ? 'match-low' : ''), title: cell.empty ? t('Empty cell') : '' }, c, inp);
+      const isRef = i === refIndexOf(it);
+      const box = h('div.imp-cell', { class: (!it.chars[i] ? 'skip ' : '') + (low ? 'match-low ' : '') + (isRef ? 'ref' : ''), title: isRef ? t('Size reference') : cell.empty ? t('Empty cell') : '' }, c, inp, isRef ? h('span.imp-ref', t('Size reference')) : null);
       cellsEl.appendChild(box);
     });
   }
@@ -276,10 +291,11 @@ export async function openImporter(initialFiles) {
       side.appendChild(section({ id: 'imp-grid', title: t('Grid'), iconName: 'grid' }, h('div.grid2', rows, cols), h('div.row-ctl', auto, even),
         h('p.hint', t('Drag the blue lines to fix the grid. Partial sheets work too: set the rows and columns you have.'))));
 
-      const presetOpts = [{ value: '', label: t('Choose…') }, ...LAYOUTS.map((L) => ({ value: L.id, label: `${L.name} (${L.chars.length})` })), ...SIMPLE_SETS.map((S) => ({ value: S.id, label: S.name }))];
+      const presetOpts = [{ value: '', label: t('Choose…') }, ...ALL_LAYOUTS.map((L) => ({ value: L.id, label: `${t(L.name)} (${L.chars.length})` })), ...SIMPLE_SETS.map((S) => ({ value: S.id, label: S.name }))];
       const preset = select({ label: t('Character layout'), iconName: 'layout', value: '', options: presetOpts, onChange: (v) => {
-        const L = LAYOUTS.find((x) => x.id === v) || SIMPLE_SETS.find((x) => x.id === v);
+        const L = ALL_LAYOUTS.find((x) => x.id === v) || SIMPLE_SETS.find((x) => x.id === v);
         if (!L) return;
+        it.layout = L;
         it.chars = it.cells.map((c, i) => (c.empty ? null : L.chars[i] ?? null));
         it.recog = null; renderAll();
       } });
@@ -291,18 +307,26 @@ export async function openImporter(initialFiles) {
         if (!r2) return;
         it.chars = it.cells.map((c) => (c.image ? suggestChars(c.image, r2, 1)[0]?.char ?? null : null));
         // whole-sheet layouts are more reliable than cell-by-cell guesses
-        const ranked = rankLayouts(it.cells.map((c) => c.image), r2, LAYOUTS.filter((L) => L.chars.length === it.cells.length));
-        if (ranked[0] && ranked[0].score < 0.12) { it.chars = ranked[0].layout.chars.map((ch, i) => (it.cells[i].empty ? null : ch)); it.recog = { name: ranked[0].layout.name, score: ranked[0].score, from: r2.name }; }
+        const ranked = rankLayouts(it.cells.map((c) => c.image), r2, ALL_LAYOUTS.filter((L) => L.chars.length === it.cells.length));
+        if (ranked[0] && (ranked[0].score < 0.12 || (ranked[1] && ranked[0].score < ranked[1].score * 0.7))) { it.chars = ranked[0].layout.chars.map((ch, i) => (it.cells[i].empty ? null : ch)); it.layout = ranked[0].layout; it.recog = { name: ranked[0].layout.name, score: ranked[0].score, from: r2.name }; }
         else it.recog = null;
         renderAll();
       } });
       side.appendChild(section({ id: 'imp-map', title: t('Characters'), iconName: 'letters' },
-        it.recog ? h('p.hint', icon('check', 14), ' ', t('Recognised as {name} by comparing shapes with {font}.', { name: it.recog.name, font: it.recog.from })) : null,
+        it.recog ? h('p.hint', icon('check', 14), ' ', t('Recognised as {name} by comparing shapes with {font}.', { name: t(it.recog.name), font: it.recog.from })) : null,
+        refIndexOf(it) >= 0 ? h('p.hint', t('The H marked “size reference” is not imported. It matches this sheet’s size to your capitals.')) : null,
         preset, recogBtn,
         h('label.field', h('span', t('Characters in reading order (\\s skips a cell)')), mappingInput)));
     }
     const nf = (key, label, o) => numberField({ label, value: opts[key], ...o, onChange: async (v) => { opts[key] = v; storeSet('importOpts', opts); for (const x of items) if (x.kind === 'sheet') await processSheet(x, false); renderAll(); }, onInput: () => {} });
-    side.appendChild(section({ id: 'imp-clean', title: t('Clean-up'), iconName: 'eraser', open: false },
+    const anyBg = items.some((x) => x.bg);
+    const bgToggle = anyBg ? toggle({ label: t('Remove the flat background colour'), value: opts.keyBackground !== false, onChange: async (v) => {
+      opts.keyBackground = v; storeSet('importOpts', opts);
+      for (const x of items) if (x.bg) { x.img = v ? removeBackgroundColor(x.orig, x.bg) : x.orig; if (x.kind === 'sheet') await processSheet(x, false); }
+      renderAll();
+    } }) : null;
+    side.appendChild(section({ id: 'imp-clean', title: t('Clean-up'), iconName: 'eraser', open: anyBg },
+      bgToggle,
       toggle({ label: t('Remove grid lines'), value: opts.clearLines, onChange: async (v) => { opts.clearLines = v; storeSet('importOpts', opts); for (const x of items) if (x.kind === 'sheet') await processSheet(x, false); renderAll(); } }),
       toggle({ label: t('Remove thin streaks'), value: opts.streaks !== false, onChange: async (v) => { opts.streaks = v; storeSet('importOpts', opts); for (const x of items) if (x.kind === 'sheet') await processSheet(x, false); renderAll(); } }),
       nf('low', t('Edge threshold'), { min: 0, max: 200, slider: true, title: t('Pixels fainter than this are removed unless they touch the glyph') }),
@@ -326,13 +350,29 @@ export async function openImporter(initialFiles) {
 
   function doImport() {
     const glyphs = [];
+    // the main H: from a sheet where H is an ordinary character (the capitals), else the font's own H
+    let mainH = null;
     for (const it of items) {
-      if (it.kind === 'single') { if (it.single.image && it.single.char) glyphs.push({ char: it.single.char, image: it.single.image, cell: null }); continue; }
+      if (it.kind !== 'sheet') continue;
+      const i = it.chars.indexOf('H');
+      if (i >= 0 && i !== refIndexOf(it) && it.cells[i].image) { mainH = it.cells[i].image.height; break; }
+    }
+    if (!mainH && target === 'existing') {
+      const fh = state.fonts.get(targetFontId)?.glyphs.get('H');
+      if (fh && fh.image) mainH = fh.image.height * fh.scale;
+    }
+    for (const it of items) {
+      if (it.kind === 'single') { if (it.single.image && it.single.char) glyphs.push({ char: it.single.char, image: it.single.image, cell: null, scale: 1 }); continue; }
+      // sheets with a reference H are scaled so that H matches the main H
+      const ri = refIndexOf(it);
+      const refImg = ri >= 0 ? it.cells[ri].image : null;
+      const sheetScale = mainH && refImg ? mainH / refImg.height : 1;
       it.cells.forEach((c, i) => {
         const ch = it.chars[i];
         if (!ch || !c.image) return;
+        if (i === ri && mainH) return; // only a size reference
         const cellH = it.grid.ys[c.row + 1] - it.grid.ys[c.row];
-        glyphs.push({ char: ch, image: c.image, baselineFromTop: opts.baselineMode === 'cell' ? cellH * opts.baselinePos - c.offsetY : null });
+        glyphs.push({ char: ch, image: c.image, scale: sheetScale, baselineFromTop: opts.baselineMode === 'cell' ? cellH * opts.baselinePos - c.offsetY : null });
       });
     }
     if (!glyphs.length) { toast(t('Nothing to import: give at least one cell a character.'), 'error'); return; }
@@ -348,7 +388,8 @@ export async function openImporter(initialFiles) {
     for (const g of glyphs) {
       const prev = font.glyphs.get(g.char);
       if (prev && prev.image && target === 'existing' && !opts.replace) { skipped++; continue; }
-      const extra = g.baselineFromTop !== null && g.baselineFromTop !== undefined ? { baseline: g.baselineFromTop, autoBaseline: false } : {};
+      const extra = { scale: g.scale || 1, baseScale: g.scale || 1 };
+      if (g.baselineFromTop !== null && g.baselineFromTop !== undefined) Object.assign(extra, { baseline: g.baselineFromTop, autoBaseline: false });
       setGlyph(font, g.char, g.image, extra);
       added++;
     }

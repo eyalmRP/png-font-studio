@@ -109,13 +109,13 @@ export function normalizeSizes(font, { tolerance = 0.035, groups = SIZE_GROUPS, 
   const changes = [];
   if (font.metrics.overshootAuto !== false) {
     // measure on unscaled glyphs so earlier normalisation does not hide the natural overshoot
-    if (reset) for (const g of font.glyphs.values()) if (g.autoScale) g.scale = 1;
+    if (reset) for (const g of font.glyphs.values()) if (g.autoScale) g.scale = g.baseScale || 1;
     font.metrics.overshoot = measureFont(font).overshoot;
   }
   for (const grp of groups) {
     const gs = grp.chars.map((c) => font.glyphs.get(c)).filter((g) => g && g.image);
     if (gs.length < 3) continue;
-    if (reset) for (const g of gs) if (g.autoScale) g.scale = 1;
+    if (reset) for (const g of gs) if (g.autoScale) g.scale = g.baseScale || 1;
     // optical height: a round glyph's height without its overshoot; the group target is their median
     const osCap = font.metrics.overshoot ?? font.metrics.capHeight * 0.015;
     const extra = (g, flatGuess) => {
@@ -375,7 +375,7 @@ export function fontToJSON(font) {
       file: g.image ? `glyphs/${[...g.char].map((c) => c.codePointAt(0).toString(16).padStart(4, '0')).join('_')}.png` : null,
       w: g.image ? g.image.width : 0,
       h: g.image ? g.image.height : 0,
-      lsb: g.lsb, rsb: g.rsb, baseline: +g.baseline.toFixed(3), scale: g.scale, sx: g.sx || 1, autoSx: !!g.autoSx, autoBaseline: g.autoBaseline, autoScale: !!g.autoScale, round: g.round ?? null,
+      lsb: g.lsb, rsb: g.rsb, baseline: +g.baseline.toFixed(3), scale: g.scale, baseScale: g.baseScale || 1, sx: g.sx || 1, autoSx: !!g.autoSx, autoBaseline: g.autoBaseline, autoScale: !!g.autoScale, round: g.round ?? null,
     });
   }
   return {
@@ -397,7 +397,7 @@ export function fontFromJSON(json, images) {
   });
   for (const gj of json.glyphs || []) {
     const image = gj.file ? images.get(gj.file) || null : null;
-    const g = createGlyph(gj.char, image, { lsb: gj.lsb || 0, rsb: gj.rsb || 0, baseline: gj.baseline ?? (image ? image.height : 0), scale: gj.scale || 1, autoBaseline: gj.autoBaseline !== false, autoScale: !!gj.autoScale, round: gj.round ?? null, sx: gj.sx || 1, autoSx: !!gj.autoSx });
+    const g = createGlyph(gj.char, image, { lsb: gj.lsb || 0, rsb: gj.rsb || 0, baseline: gj.baseline ?? (image ? image.height : 0), scale: gj.scale || 1, autoBaseline: gj.autoBaseline !== false, autoScale: !!gj.autoScale, round: gj.round ?? null, sx: gj.sx || 1, autoSx: !!gj.autoSx, baseScale: gj.baseScale || 1 });
     font.glyphs.set(gj.char, g);
   }
   return font;

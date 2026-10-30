@@ -3,23 +3,37 @@
 /** Built-in 6×6 layouts matching the bubble sheets (reading order, row-major). */
 export const LAYOUTS = [
   {
-    id: 'bubble-1', name: 'Sheet 1 · A–Z a–j', rows: 6, cols: 6,
+    id: 'bubble-1', name: 'Bubble sheet 1 · A–Z a–j', rows: 6, cols: 6,
     chars: [...'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghij'],
   },
   {
-    id: 'bubble-2', name: 'Sheet 2 · k–z 0–9 punctuation', rows: 6, cols: 6,
+    id: 'bubble-2', name: 'Bubble sheet 2 · k–z 0–9 punctuation', rows: 6, cols: 6,
     chars: [...'klmnopqrstuvwxyz0123456789.,:;!?¡¿', "'", '"'],
   },
   {
-    id: 'bubble-3', name: 'Sheet 3 · quotes, maths, brackets', rows: 6, cols: 6,
+    id: 'bubble-3', name: 'Bubble sheet 3 · quotes, maths, brackets', rows: 6, cols: 6,
     chars: ['‘', '’', '“', '”', '`', '~', '…', '•', '+', '−', '×', '÷', '=', '≠', '≈', '≤', '≥', '±',
       '%', '‰', '∞', '√', 'π', 'Σ', '(', ')', '[', ']', '{', '}', '<', '>', '/', '\\', '|', '_'],
   },
   {
-    id: 'bubble-4', name: 'Sheet 4 · dashes, currency, signs', rows: 6, cols: 6,
+    id: 'bubble-4', name: 'Bubble sheet 4 · dashes, currency, signs', rows: 6, cols: 6,
     chars: ['-', '–', '—', '^', '&', '*', '#', '@', '$', '€', '£', '¥', '₪', '¢', '₹', '₽', '₩', '₿',
       '©', '®', '™', '°', '§', '¶', '†', '‡', 'µ', 'Ω', '∆', '∂', '∫', '∏', '∈', '∩', '∪', '¬'],
   },
+];
+
+/**
+ * Layouts of the six ChatGPT prompt sheets (7×4, last one 3×3). `ref` is the index of the reference H
+ * used only to match sizes between sheets.
+ */
+const rowsOf = (...rows) => rows.flatMap((r) => r.split(' '));
+export const PROMPT_LAYOUTS = [
+  { id: 'prompt-1', name: 'Prompt sheet 1 · capitals', rows: 4, cols: 7, chars: rowsOf('A B C D E F G', 'H I J K L M N', 'O P Q R S T U', 'V W X Y Z ! ?') },
+  { id: 'prompt-2', name: 'Prompt sheet 2 · lowercase', rows: 4, cols: 7, ref: 26, chars: rowsOf('a b c d e f g', 'h i j k l m n', 'o p q r s t u', 'v w x y z H .') },
+  { id: 'prompt-3', name: 'Prompt sheet 3 · digits & punctuation', rows: 4, cols: 7, ref: 27, chars: rowsOf("0 1 2 3 4 5 6", "7 8 9 , : ; '", '" ‘ ’ “ ” ¡ ¿', '- – — … • ` H') },
+  { id: 'prompt-4', name: 'Prompt sheet 4 · brackets & signs', rows: 4, cols: 7, ref: 27, chars: rowsOf('( ) [ ] { } /', '\\ | _ < > ~ ^', '& * # @ % ‰ §', '¶ † ‡ © ® ™ H') },
+  { id: 'prompt-5', name: 'Prompt sheet 5 · currency & maths', rows: 4, cols: 7, ref: 27, chars: rowsOf('$ € £ ¥ ₪ ¢ ₹', '₽ ₩ ₿ ° + − ×', '÷ = ≠ ≈ ≤ ≥ ±', '∞ √ π Σ µ Ω H') },
+  { id: 'prompt-6', name: 'Prompt sheet 6 · more maths', rows: 3, cols: 3, ref: 8, chars: rowsOf('∆ ∂ ∫', '∏ ∈ ∩', '∪ ¬ H') },
 ];
 
 export const CHARSET_GROUPS = [

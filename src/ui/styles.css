@@ -289,6 +289,9 @@ button { cursor: pointer; }
 .imp-cell input { width: 100%; text-align: center; border: 1px solid var(--line); background: var(--panel-2); color: var(--fg); border-radius: 4px; height: 26px; font-size: 15px; font-weight: 600; margin-top: 3px; }
 .imp-cell input:focus { outline: none; border-color: var(--accent); }
 .imp-cell.skip { opacity: 0.35; }
+.imp-cell { position: relative; }
+.imp-cell.ref { border: 1px dashed var(--accent); }
+.imp-ref { position: absolute; top: 2px; inset-inline-start: 2px; font-size: 9px; background: var(--accent); color: var(--accent-fg); border-radius: 4px; padding: 0 4px; }
 .imp-cell.match-low input { box-shadow: 0 0 0 1px var(--warn); }
 .imp-files { display: flex; gap: 6px; flex-wrap: wrap; }
 .imp-file { border: 1px solid var(--line); border-radius: 6px; padding: 3px; background: var(--panel-2); cursor: pointer; }

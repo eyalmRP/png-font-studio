@@ -153,3 +153,20 @@ test('recolorRange changes the blue face only and keeps the pink base', async ()
   assert.deepEqual([...px.slice(8, 11)], [230, 40, 200], 'magenta base untouched');
   assert.deepEqual([...px.slice(12, 15)], [250, 250, 255], 'white highlight untouched');
 });
+
+test('flat green background is detected and removed without a green fringe', async () => {
+  const { createImage, detectBackground, removeBackgroundColor } = await import('../src/core/image.js');
+  const img = createImage(20, 20);
+  for (let i = 0; i < img.data.length; i += 4) { img.data[i] = 0; img.data[i + 1] = 255; img.data[i + 2] = 0; img.data[i + 3] = 255; }
+  const set = (x, y, c) => { const i = (y * 20 + x) * 4; img.data.set(c, i); };
+  for (let y = 5; y < 15; y++) for (let x = 5; x < 15; x++) set(x, y, [40, 120, 255, 255]);
+  set(4, 10, [20, 188, 128, 255]); // 50% blend of blue and green
+  const bg = detectBackground(img);
+  assert.deepEqual(bg, [0, 255, 0]);
+  const out = removeBackgroundColor(img, bg);
+  assert.equal(out.data[3], 0, 'background gone');
+  assert.equal(out.data[(10 * 20 + 10) * 4 + 3], 255, 'letter kept');
+  const e = (10 * 20 + 4) * 4;
+  assert.ok(out.data[e + 3] > 60 && out.data[e + 3] < 200, 'edge semi-transparent');
+  assert.ok(out.data[e + 1] < 160, 'green un-mixed from the edge');
+});

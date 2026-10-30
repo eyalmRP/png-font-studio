@@ -65,15 +65,18 @@ export async function fontToZip(font) {
   return zipSync(entries);
 }
 
-export async function fontFromZipBytes(bytes, prefix = '') {
+export async function fontFromZipBytes(bytes, prefix = '', onProgress = null) {
   const files = await unzip(bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes), inflateRaw);
   const jsonBytes = files.get(prefix + 'font.json');
   if (!jsonBytes) throw new Error('This zip has no font.json, so it is not a PNG Font Studio font');
   const json = JSON.parse(textOf(jsonBytes));
   const images = new Map();
-  await Promise.all(json.glyphs.filter((g) => g.file).map(async (g) => {
+  const todo = json.glyphs.filter((g) => g.file);
+  let n = 0;
+  await Promise.all(todo.map(async (g) => {
     const b = files.get(prefix + g.file);
     if (b) images.set(g.file, await decodeImage(new Blob([b], { type: 'image/png' })));
+    if (onProgress) onProgress(++n / todo.length);
   }));
   return fontFromJSON(json, images);
 }

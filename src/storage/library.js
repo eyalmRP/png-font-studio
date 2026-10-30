@@ -51,14 +51,16 @@ export async function saveFontRecord(font) {
 
 export function deleteFontRecord(id) { return tx('fonts', 'readwrite', (s) => s.delete(id)); }
 
-export async function loadFontRecords() {
+export async function loadFontRecords(onProgress = null) {
   const recs = await tx('fonts', 'readonly', (s) => s.getAll());
   if (!recs) return [];
   const out = [];
+  const total = recs.reduce((n, r) => n + Object.keys(r.files || {}).length, 0) || 1;
+  let done = 0;
   for (const r of recs) {
     try {
       const images = new Map();
-      await Promise.all(Object.entries(r.files || {}).map(async ([n, b]) => images.set(n, await decodeImage(b))));
+      await Promise.all(Object.entries(r.files || {}).map(async ([n, b]) => { images.set(n, await decodeImage(b)); if (onProgress) onProgress(++done / total); }));
       const f = fontFromJSON(r.json, images);
       f.order = r.order; f.builtin = r.builtin;
       out.push(f);

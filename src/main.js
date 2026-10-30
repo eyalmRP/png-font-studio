@@ -4,7 +4,7 @@ import { applyLang, t } from './ui/i18n.js';
 import { h, storeGet, storeSet } from './ui/dom.js';
 import { faceVariant } from './core/recolor.js';
 import { state, addFont, createProject, projectFromJSON, newTextLayer, newEffect, emit, markLayer } from './app/store.js';
-import { mountApp, render } from './ui/app.js';
+import { mountApp, render, applyTheme } from './ui/app.js';
 import { fontFromZipBytes } from './storage/files.js';
 import { loadFontRecords, saveFontRecord, loadProjectRecord } from './storage/library.js';
 import { startAutosave } from './ui/projectio.js';
@@ -27,33 +27,93 @@ function fromBase64(s) {
   return out;
 }
 
-async function builtinBytes(b) {
+// the build writes each font file's size here, for download progress when the server sends no length
+const FONT_BYTES = typeof __PFS_FONT_BYTES__ !== 'undefined' ? __PFS_FONT_BYTES__ : {};
+
+/** The font package bytes; onProgress(0..1) follows the download. */
+async function builtinBytes(b, onProgress) {
   const embedded = window.__PFS_FONTS__ && window.__PFS_FONTS__[b.key];
   if (embedded) return fromBase64(embedded);
   const res = await fetch(b.file);
   if (!res.ok) throw new Error(`Could not load ${b.file}`);
-  return fromBase64((await res.json()).zip);
+  // a compressed response's Content-Length counts compressed bytes, so prefer the size the build recorded
+  const total = FONT_BYTES[b.key] || Number(res.headers.get('content-length')) || 0;
+  if (!res.body || !total) return fromBase64((await res.json()).zip);
+  const reader = res.body.getReader();
+  const chunks = [];
+  let got = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    chunks.push(value); got += value.length;
+    onProgress(Math.min(1, got / total));
+  }
+  const all = new Uint8Array(got);
+  let o = 0;
+  for (const c of chunks) { all.set(c, o); o += c.length; }
+  return fromBase64(JSON.parse(new TextDecoder().decode(all)).zip);
 }
 
-export async function loadBuiltins({ save = true } = {}) {
+const pause = () => new Promise((r) => setTimeout(r, 16)); // lets the loading screen repaint
+
+/**
+ * Load the built-in fonts. progress(fraction, label) reports the download, the glyph decoding and the colour
+ * variants. Saving them to the browser library happens afterwards (`saved` resolves when it is done), so the app
+ * can open first.
+ */
+export async function loadBuiltins({ save = true, progress = () => {} } = {}) {
   const fonts = [];
   const byId = new Map();
+  const embedded = !!window.__PFS_FONTS__;
+  // rough share of the wait for each step
+  const plan = embedded ? { download: 0.1, decode: 0.4, variant: 0.25 } : { download: 0.62, decode: 0.14, variant: 0.12 };
+  let at = 0;
   for (const b of BUILTIN) {
     try {
       let f;
       if (b.from) {
         const src = byId.get(b.from);
         if (!src) continue;
+        progress(at, t('Making {name}…', { name: b.name }));
+        await pause();
         f = faceVariant(src, b.face, b.name);
         f.family = src.family;
-      } else f = await fontFromZipBytes(await builtinBytes(b));
+        at += plan.variant;
+      } else {
+        const label = t('Downloading fonts…');
+        progress(at, label);
+        const bytes = await builtinBytes(b, (x) => progress(at + x * plan.download, label));
+        at += plan.download;
+        f = await fontFromZipBytes(bytes, '', (x) => progress(at + x * plan.decode, t('Preparing letters…')));
+        at += plan.decode;
+      }
       f.id = b.id; f.builtin = true; f.order = b.order;
       byId.set(f.id, f);
       fonts.push(f);
-      if (save) await saveFontRecord(f);
     } catch (e) { console.warn(e); }
   }
-  return fonts;
+  progress(1, t('Opening…'));
+  const saved = save ? (async () => { for (const f of fonts) await saveFontRecord(f); })() : Promise.resolve();
+  return { fonts, saved };
+}
+
+/** Full-page loading screen with a progress bar; set(fraction, label) never moves backwards. */
+function loadingScreen(root) {
+  const bar = h('div');
+  const pct = h('span.boot-pct', '0%');
+  const step = h('span.boot-step', t('Loading…'));
+  const el = h('div.boot', h('div.boot-card', h('div.boot-title', 'PNG Font Studio'), h('div.progress.boot-bar', bar), h('div.boot-row', step, pct)));
+  root.appendChild(el);
+  let shown = 0;
+  return {
+    set(f, label) {
+      shown = Math.max(shown, Math.min(1, f));
+      bar.style.width = (shown * 100).toFixed(1) + '%';
+      pct.textContent = Math.round(shown * 100) + '%';
+      if (label) step.textContent = label;
+    },
+    remove() { el.remove(); },
+  };
 }
 
 function demoProject() {
@@ -79,17 +139,25 @@ function demoProject() {
 
 async function boot() {
   applyLang();
+  applyTheme();
+  // the loading screen already takes the accent of the mode last used (the title view keeps it in step after)
+  document.documentElement.dataset.mode = storeGet('animatedDefault', true) === false ? 'still' : 'animated';
+  // the UI font loads without holding up the first paint (a <link> in the head would block it)
+  document.head.appendChild(h('link', { rel: 'stylesheet', href: 'https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;600&display=swap' }));
   const root = document.getElementById('app');
-  root.appendChild(h('div.empty', { style: { margin: 'auto' } }, t('Loading fonts…')));
-  let fonts = await loadFontRecords();
-  if (!fonts.length) { fonts = await loadBuiltins(); storeSet('builtinVersion', BUILTIN_VERSION); }
-  else if (storeGet('builtinVersion', 1) < BUILTIN_VERSION) {
-    // newer built-in fonts replace the stored ones; the user's own fonts stay
-    const fresh = await loadBuiltins();
-    const ids = new Set(fresh.map((f) => f.id));
-    fonts = [...fresh, ...fonts.filter((f) => !ids.has(f.id))];
-    storeSet('builtinVersion', BUILTIN_VERSION);
+  const screen = loadingScreen(root);
+  const fresh = storeGet('builtinVersion', 1) < BUILTIN_VERSION;
+  // reading the library is the whole wait on a return visit, but only a small part when the built-ins are new
+  let fonts = await loadFontRecords((x) => screen.set(x * (fresh ? 0.05 : 0.95), t('Opening your fonts…')));
+  let saved = Promise.resolve();
+  if (!fonts.length || fresh) {
+    // first visit, or newer built-in fonts: they replace the stored ones; the user's own fonts stay
+    const b = await loadBuiltins({ progress: (x, label) => screen.set(0.05 + x * 0.93, label) });
+    const ids = new Set(b.fonts.map((f) => f.id));
+    fonts = [...b.fonts, ...fonts.filter((f) => !ids.has(f.id))];
+    saved = b.saved.then(() => storeSet('builtinVersion', BUILTIN_VERSION));
   }
+  screen.set(1);
   for (const f of fonts) addFont(f, { select: false });
   state.currentFontId = state.fontOrder[0] || null;
   const rec = await loadProjectRecord();
@@ -98,8 +166,10 @@ async function boot() {
   }
   if (!state.project) state.project = demoProject();
   state.time = Math.min(1.8, state.project.duration / 2);
+  screen.remove();
   root.textContent = '';
   mountApp(root);
+  saved.catch((e) => console.warn(e));
   startAutosave();
   on('remount', () => render());
   // fonts can finish decoding after layers were laid out

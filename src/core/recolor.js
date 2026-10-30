@@ -99,19 +99,12 @@ export function paletteFromStops(st) {
  * band moves by what it takes to reach the target. Returns [{ d, hue, k, m, y, g }]: k scales chroma; a pixel's
  * brightness becomes y + (its brightness − the band average m) × g, so g above 1 deepens shadows and lifts lights.
  */
+const bandCache = new WeakMap(); // font → { key, sum }: Orange and Pearl measure the same bands of Bubble Blue
 export function resolvePalette(font, palette, h0 = dominantHue(font)) {
-  const sum = palette.map(() => ({ n: 0, c: 0, y: 0 }));
-  for (const g of font.glyphs.values()) {
-    if (!g.image) continue;
-    const dt = g.image.data;
-    for (let i = 0; i < dt.length; i += 8) {
-      if (dt[i + 3] < 200) continue;
-      const [h, c, y] = hcy(dt[i] / 255, dt[i + 1] / 255, dt[i + 2] / 255);
-      if (c < 0.15) continue;
-      const off = ((h - h0 + 540) % 360) - 180;
-      palette.forEach((p, j) => { if (Math.abs(off - p.d) <= 5) { sum[j].n++; sum[j].c += c; sum[j].y += y; } });
-    }
-  }
+  const key = `${font.rev}|${h0}|${palette.map((p) => p.d).join(',')}`;
+  const cached = bandCache.get(font);
+  const sum = cached && cached.key === key ? cached.sum : measureBands(font, palette, h0);
+  bandCache.set(font, { key, sum });
   return palette.map((p, j) => {
     const st = sum[j];
     if (p.keep || !st.n) return { d: p.d, hue: (h0 + p.d + 360) % 360, k: 1, m: 0, y: 0, g: 1, keep: true };
@@ -119,31 +112,81 @@ export function resolvePalette(font, palette, h0 = dominantHue(font)) {
   });
 }
 
+function measureBands(font, palette, h0) {
+  const sum = palette.map(() => ({ n: 0, c: 0, y: 0 }));
+  for (const g of font.glyphs.values()) {
+    if (!g.image) continue;
+    const dt = g.image.data;
+    for (let i = 0; i < dt.length; i += 8) {
+      if (dt[i + 3] < 200) continue;
+      // hcy() inlined: this runs over a million times per font
+      const r = dt[i] / 255, gg = dt[i + 1] / 255, b = dt[i + 2] / 255;
+      const mx = Math.max(r, gg, b), c = mx - Math.min(r, gg, b);
+      if (c < 0.15) continue;
+      const h = ((mx === r ? ((gg - b) / c) % 6 : mx === gg ? (b - r) / c + 2 : (r - gg) / c + 4) * 60 + 360) % 360;
+      const y = LUMA[0] * r + LUMA[1] * gg + LUMA[2] * b;
+      const off = ((h - h0 + 540) % 360) - 180;
+      for (let j = 0; j < palette.length; j++) if (Math.abs(off - palette[j].d) <= 5) { sum[j].n++; sum[j].c += c; sum[j].y += y; }
+    }
+  }
+  return sum;
+}
+
 /** Recolour pixels band by band with a resolved palette (see resolvePalette). Greys and whites stay. */
-export function remapPalette(data, h0, anchors) {
+export function remapPalette(data, h0, anchors, memo = colorMemo()) {
   const A = [...anchors].sort((a, b) => a.d - b.d);
+  const { keys, vals, mask } = memo;
   for (let i = 0; i < data.length; i += 4) {
     if (!data[i + 3]) continue;
-    const r = data[i] / 255, g = data[i + 1] / 255, b = data[i + 2] / 255;
-    const [h, c, y] = hcy(r, g, b);
-    const w = Math.min(1, Math.max(0, (c - 0.06) / 0.14)); // near-grey highlights change little
-    if (w <= 0) continue;
-    const off = ((h - h0 + 540) % 360) - 180;
-    let lo = A[0], hi = A[A.length - 1], t = 0;
-    if (off <= lo.d) hi = lo; else if (off >= hi.d) lo = hi;
-    else for (let k = 0; k < A.length - 1; k++) if (off >= A[k].d && off <= A[k + 1].d) { lo = A[k]; hi = A[k + 1]; t = (off - lo.d) / (hi.d - lo.d); break; }
-    // a kept band keeps the pixel's own hue
-    const hueLo = lo.keep ? h : lo.hue, hueHi = hi.keep ? h : hi.hue;
-    const L = (key) => lo[key] + (hi[key] - lo[key]) * t;
-    // a kept band leaves brightness alone
-    const ly = (a) => (a.keep ? y : a.y + (y - a.m) * a.g);
-    const ny = ly(lo) + (ly(hi) - ly(lo)) * t;
-    const out = fromHcy(lerpHue(hueLo, hueHi, t), Math.min(1, c * L('k')), Math.min(1, Math.max(0, ny)));
-    data[i] = Math.round((r + (out[0] - r) * w) * 255);
-    data[i + 1] = Math.round((g + (out[1] - g) * w) * 255);
-    data[i + 2] = Math.round((b + (out[2] - b) * w) * 255);
+    // the result depends on the colour alone, and glyph images repeat colours a lot: remember each one
+    // (open-addressing table keyed by 0xRRGGBB; a full table just stops remembering)
+    const key = (data[i] << 16) | (data[i + 1] << 8) | data[i + 2];
+    let j = Math.imul(key, 0x9e3779b1) >>> memo.shift, v = -1;
+    for (let probe = 0; probe < 32; probe++, j = (j + 1) & mask) {
+      if (keys[j] === key) { v = vals[j]; break; }
+      if (keys[j] === -1) { v = remapColor(data[i], data[i + 1], data[i + 2], h0, A); keys[j] = key; vals[j] = v; break; }
+    }
+    if (v < 0) v = remapColor(data[i], data[i + 1], data[i + 2], h0, A);
+    data[i] = v >> 16; data[i + 1] = (v >> 8) & 255; data[i + 2] = v & 255;
   }
   return data;
+}
+
+/** Colour → result table for remapPalette, shared across a font's glyphs (2^bits slots). */
+export function colorMemo(bits = 16) {
+  return { keys: new Int32Array(1 << bits).fill(-1), vals: new Int32Array(1 << bits), mask: (1 << bits) - 1, shift: 32 - bits };
+}
+
+const clamp8 = (v) => Math.min(255, Math.max(0, v));
+/** One colour through a resolved palette (anchors sorted by d), packed as 0xRRGGBB. hcy/fromHcy are inlined. */
+function remapColor(R, G, B, h0, A) {
+  const r = R / 255, g = G / 255, b = B / 255;
+  const mx = Math.max(r, g, b), c = mx - Math.min(r, g, b);
+  const w = Math.min(1, Math.max(0, (c - 0.06) / 0.14)); // near-grey highlights change little
+  if (w <= 0) return (R << 16) | (G << 8) | B;
+  const h = ((mx === r ? ((g - b) / c) % 6 : mx === g ? (b - r) / c + 2 : (r - g) / c + 4) * 60 + 360) % 360;
+  const y = LUMA[0] * r + LUMA[1] * g + LUMA[2] * b;
+  const off = ((h - h0 + 540) % 360) - 180;
+  let lo = A[0], hi = A[A.length - 1], t = 0;
+  if (off <= lo.d) hi = lo; else if (off >= hi.d) lo = hi;
+  else for (let k = 0; k < A.length - 1; k++) if (off >= A[k].d && off <= A[k + 1].d) { lo = A[k]; hi = A[k + 1]; t = (off - lo.d) / (hi.d - lo.d); break; }
+  // a kept band keeps the pixel's own hue and brightness
+  const hueLo = lo.keep ? h : lo.hue, hueHi = hi.keep ? h : hi.hue;
+  const lyLo = lo.keep ? y : lo.y + (y - lo.m) * lo.g, lyHi = hi.keep ? y : hi.y + (y - hi.m) * hi.g;
+  const ny = Math.min(1, Math.max(0, lyLo + (lyHi - lyLo) * t));
+  // fromHcy(hue, chroma, ny)
+  const hh = lerpHue(hueLo, hueHi, t);
+  let cc = Math.min(1, c * (lo.k + (hi.k - lo.k) * t));
+  const k5 = (5 + hh / 60) % 6, k3 = (3 + hh / 60) % 6, k1 = (1 + hh / 60) % 6;
+  const p0 = 1 - Math.max(0, Math.min(k5, 4 - k5, 1)), p1 = 1 - Math.max(0, Math.min(k3, 4 - k3, 1)), p2 = 1 - Math.max(0, Math.min(k1, 4 - k1, 1));
+  const lp = LUMA[0] * p0 + LUMA[1] * p1 + LUMA[2] * p2;
+  if (p0 > lp) cc = Math.min(cc, (1 - ny) / (p0 - lp)); else if (p0 < lp) cc = Math.min(cc, ny / (lp - p0));
+  if (p1 > lp) cc = Math.min(cc, (1 - ny) / (p1 - lp)); else if (p1 < lp) cc = Math.min(cc, ny / (lp - p1));
+  if (p2 > lp) cc = Math.min(cc, (1 - ny) / (p2 - lp)); else if (p2 < lp) cc = Math.min(cc, ny / (lp - p2));
+  cc = Math.max(0, cc);
+  const m = ny - lp * cc;
+  const o0 = Math.min(1, Math.max(0, p0 * cc + m)), o1 = Math.min(1, Math.max(0, p1 * cc + m)), o2 = Math.min(1, Math.max(0, p2 * cc + m));
+  return (clamp8(Math.round((r + (o0 - r) * w) * 255)) << 16) | (clamp8(Math.round((g + (o1 - g) * w) * 255)) << 8) | clamp8(Math.round((b + (o2 - b) * w) * 255));
 }
 
 /** A copy of the font recoloured to a preset: the whole design follows the preset's palette. */
@@ -153,7 +196,8 @@ export function faceVariant(font, presetName, name) {
   const h0 = dominantHue(font);
   const anchors = resolvePalette(font, preset.palette || paletteFromStops(preset.stops), h0);
   const out = cloneFont(font, name);
-  for (const g of out.glyphs.values()) if (g.image) remapPalette(g.image.data, h0, anchors);
+  const memo = colorMemo(20);
+  for (const g of out.glyphs.values()) if (g.image) remapPalette(g.image.data, h0, anchors, memo);
   touch(out);
   return out;
 }

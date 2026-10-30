@@ -10,23 +10,28 @@ const dist = path.join(root, 'dist');
 const watch = process.argv.includes('--watch');
 
 async function build() {
+  fs.rmSync(path.join(dist, 'artifact/fonts'), { recursive: true, force: true });
+  fs.mkdirSync(path.join(dist, 'artifact/fonts'), { recursive: true });
+  // the page host serves .json but not .zip, so the font package ships as base64 inside JSON; the app is told
+  // each file's size so it can show download progress
+  const fontBytes = {};
+  for (const k of ['bubble-blue']) {
+    const json = JSON.stringify({ zip: fs.readFileSync(path.join(root, 'assets/fonts', k + '.zip')).toString('base64') });
+    fs.writeFileSync(path.join(dist, 'artifact/fonts', k + '.json'), json);
+    fontBytes[k] = Buffer.byteLength(json);
+  }
   const res = await esbuild.build({
     entryPoints: [path.join(root, 'src/main.js')],
     bundle: true, format: 'iife', minify: true, write: false, target: ['chrome110', 'safari16', 'firefox115'],
-    legalComments: 'none', logLevel: 'warning',
+    legalComments: 'none', logLevel: 'warning', define: { __PFS_FONT_BYTES__: JSON.stringify(fontBytes) },
   });
   const js = res.outputFiles[0].text.replace(/<\/script/gi, '<\\/script');
   const css = fs.readFileSync(path.join(root, 'src/ui/styles.css'), 'utf8');
   const head = `<title>PNG Font Studio</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;600&display=swap">
 <style>${css}</style>`;
   const bodyStart = '<div id="app"></div>';
-  fs.rmSync(path.join(dist, 'artifact/fonts'), { recursive: true, force: true });
-  fs.mkdirSync(path.join(dist, 'artifact/fonts'), { recursive: true });
-  // the page host serves .json but not .zip, so the font package ships as base64 inside JSON
-  for (const k of ['bubble-blue']) fs.writeFileSync(path.join(dist, 'artifact/fonts', k + '.json'), JSON.stringify({ zip: fs.readFileSync(path.join(root, 'assets/fonts', k + '.zip')).toString('base64') }));
   fs.writeFileSync(path.join(dist, 'artifact/index.html'), `${head}\n${bodyStart}\n<script>${js}</script>\n`);
   const embed = {};
   for (const k of ['bubble-blue']) embed[k] = fs.readFileSync(path.join(root, 'assets/fonts', k + '.zip')).toString('base64');

@@ -48,6 +48,12 @@
   --stage: #0d0b12; --checker-a: #23202d; --checker-b: #1b1924; --shadow: 0 10px 34px rgba(0, 0, 0, 0.5);
   color-scheme: dark;
 }
+/* Still mode (PNG titles) turns the interface accent blue; Animated (video) keeps the pink */
+:root[data-mode="still"] { --accent: #1f6fe0; --accent-fg: #ffffff; --accent-soft: #dde9fc; }
+@media (prefers-color-scheme: dark) {
+  :root[data-mode="still"]:not([data-theme="light"]) { --accent: #4aa3ff; --accent-fg: #06121f; --accent-soft: #15263d; }
+}
+:root[data-mode="still"][data-theme="dark"] { --accent: #4aa3ff; --accent-fg: #06121f; --accent-soft: #15263d; }
 
 html, body { height: 100%; }
 body { background: var(--bg); color: var(--fg); font-family: var(--font-ui); font-size: 13px; margin: 0; overflow: hidden; -webkit-font-smoothing: antialiased; }
@@ -343,6 +349,13 @@ button { cursor: pointer; }
 .export-card span { color: var(--muted); font-size: 11px; line-height: 1.35; }
 .export-card.on { border-color: var(--accent); background: var(--accent-soft); }
 .export-card:disabled { opacity: 0.5; }
+/* loading screen */
+.boot { position: fixed; inset: 0; display: grid; place-items: center; background: var(--bg); z-index: 50; }
+.boot-card { width: min(360px, calc(100vw - 32px)); display: flex; flex-direction: column; gap: 14px; }
+.boot-title { font-weight: 700; font-size: 24px; letter-spacing: 0.01em; background: linear-gradient(90deg, var(--accent), var(--cyan)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.boot-bar { height: 8px; }
+.boot-row { display: flex; justify-content: space-between; gap: 12px; color: var(--muted); font-size: 13px; }
+.boot-pct { font-variant-numeric: tabular-nums; color: var(--fg-2); }
 .progress { height: 6px; background: var(--field); border-radius: 999px; overflow: hidden; }
 .progress > div { height: 100%; background: var(--accent); width: 0; transition: width 0.15s; }
 

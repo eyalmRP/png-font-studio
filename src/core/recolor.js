@@ -13,17 +13,19 @@ export const FACE_PRESETS = [
   {
     name: 'Orange', stops: stops([0.2, '#f2440f'], [0.35, '#ff6a12'], [0.5, '#ff9a1a'], [0.65, '#ffc21f'], [0.8, '#ffe437'], [0.95, '#fff6b8']),
     palette: [
-      { d: -10, hue: 56, c: 0.5, y: 0.93 }, { d: 0, hue: 50, c: 0.86, y: 0.83 }, { d: 10, hue: 42, c: 0.92, y: 0.72 }, { d: 20, hue: 36, c: 0.93, y: 0.65 },
-      { d: 30, hue: 30, c: 0.92, y: 0.58 }, { d: 40, hue: 24, c: 0.9, y: 0.52 }, { d: 50, hue: 16, c: 0.85, y: 0.42 }, { d: 70, hue: 6, c: 0.75, y: 0.33 },
-      { d: 90, hue: 344, c: 0.74, y: 0.34 }, { d: 100, hue: 333, c: 0.8, y: 0.38 }, { d: 110, hue: 323, c: 0.8, y: 0.44 }, { d: 120, hue: 316, c: 0.7, y: 0.52 },
+      { d: -10, hue: 56, c: 0.5, y: 0.93 }, { d: 0, hue: 50, c: 0.86, y: 0.83 }, { d: 10, hue: 42, c: 0.92, y: 0.72 }, { d: 20, hue: 36, c: 0.93, y: 0.64 },
+      { d: 30, hue: 30, c: 0.92, y: 0.56, g: 1.2 }, { d: 40, hue: 24, c: 0.9, y: 0.47, g: 1.3 }, { d: 50, hue: 16, c: 0.85, y: 0.36, g: 1.5 },
+      { d: 70, hue: 6, c: 0.78, y: 0.3, g: 1.5 }, { d: 90, hue: 344, c: 0.76, y: 0.31, g: 1.5 }, { d: 100, hue: 333, c: 0.8, y: 0.32, g: 1.4 },
+      { d: 110, hue: 323, c: 0.8, y: 0.39, g: 1.3 }, { d: 120, hue: 316, c: 0.7, y: 0.48, g: 1.2 },
     ],
   },
   {
     name: 'Pearl', stops: stops([0.2, '#7a6fe0'], [0.35, '#aaa3ef'], [0.5, '#d6d3f8'], [0.65, '#eeedfc'], [0.8, '#fbfbff'], [1, '#ffffff']),
     palette: [
-      { d: -10, hue: 210, c: 0.02, y: 0.97 }, { d: 0, hue: 215, c: 0.05, y: 0.93 }, { d: 10, hue: 220, c: 0.12, y: 0.88 }, { d: 20, hue: 226, c: 0.18, y: 0.82 },
-      { d: 30, hue: 232, c: 0.24, y: 0.75 }, { d: 40, hue: 238, c: 0.32, y: 0.62 }, { d: 50, hue: 245, c: 0.55, y: 0.36 }, { d: 70, hue: 262, c: 0.6, y: 0.33 },
-      { d: 90, hue: 290, c: 0.6, y: 0.37 }, { d: 100, hue: 312, c: 0.65, y: 0.4 }, { d: 110, hue: 328, c: 0.7, y: 0.43 }, { d: 120, hue: 335, c: 0.65, y: 0.5 },
+      { d: -10, hue: 210, c: 0.02, y: 0.97 }, { d: 0, hue: 215, c: 0.05, y: 0.94 }, { d: 10, hue: 220, c: 0.12, y: 0.9 }, { d: 20, hue: 226, c: 0.18, y: 0.85 },
+      { d: 30, hue: 232, c: 0.24, y: 0.78, g: 1.2 }, { d: 40, hue: 238, c: 0.32, y: 0.64, g: 1.3 }, { d: 50, hue: 245, c: 0.58, y: 0.3, g: 1.6 },
+      { d: 70, hue: 262, c: 0.62, y: 0.27, g: 1.5 }, { d: 90, hue: 290, c: 0.62, y: 0.3, g: 1.5 }, { d: 100, hue: 312, c: 0.66, y: 0.33, g: 1.4 },
+      { d: 110, hue: 328, c: 0.7, y: 0.38, g: 1.3 }, { d: 120, hue: 335, c: 0.65, y: 0.46, g: 1.2 },
     ],
   },
   { name: 'Gold', stops: stops([0.2, '#8a5300'], [0.4, '#c98a10'], [0.6, '#f0c040'], [0.8, '#fff0a0'], [0.95, '#fffbe6']) },
@@ -89,12 +91,13 @@ export function paletteFromStops(st) {
   };
   const face = [[-10, 0.95], [0, 0.85], [10, 0.72], [20, 0.6], [30, 0.5], [40, 0.4]].map(([d, t]) => { const [hue, c, y] = at(t); return { d, hue, c, y }; });
   const [rh, rc] = at(0.15);
-  return [...face, { d: 50, hue: rh, c: rc * 0.8, y: 0.2 }, { d: 70, keep: true }];
+  return [...face, { d: 50, hue: rh, c: rc * 0.8, y: 0.2, g: 1.4 }, { d: 70, keep: true }];
 }
 
 /**
  * Resolve a palette against a font: measure the font's own colourfulness and brightness in each band, so each
- * band shifts by what it takes to reach the target. Returns [{ d, hue, k, s }] (k scales chroma, s shifts luma).
+ * band moves by what it takes to reach the target. Returns [{ d, hue, k, m, y, g }]: k scales chroma; a pixel's
+ * brightness becomes y + (its brightness − the band average m) × g, so g above 1 deepens shadows and lifts lights.
  */
 export function resolvePalette(font, palette, h0 = dominantHue(font)) {
   const sum = palette.map(() => ({ n: 0, c: 0, y: 0 }));
@@ -111,8 +114,8 @@ export function resolvePalette(font, palette, h0 = dominantHue(font)) {
   }
   return palette.map((p, j) => {
     const st = sum[j];
-    if (p.keep || !st.n) return { d: p.d, hue: (h0 + p.d + 360) % 360, k: 1, s: 0, keep: !!p.keep };
-    return { d: p.d, hue: p.hue, k: p.c / (st.c / st.n), s: p.y - st.y / st.n };
+    if (p.keep || !st.n) return { d: p.d, hue: (h0 + p.d + 360) % 360, k: 1, m: 0, y: 0, g: 1, keep: true };
+    return { d: p.d, hue: p.hue, k: p.c / (st.c / st.n), m: st.y / st.n, y: p.y, g: p.g ?? 1 };
   });
 }
 
@@ -131,8 +134,11 @@ export function remapPalette(data, h0, anchors) {
     else for (let k = 0; k < A.length - 1; k++) if (off >= A[k].d && off <= A[k + 1].d) { lo = A[k]; hi = A[k + 1]; t = (off - lo.d) / (hi.d - lo.d); break; }
     // a kept band keeps the pixel's own hue
     const hueLo = lo.keep ? h : lo.hue, hueHi = hi.keep ? h : hi.hue;
-    const nh = lerpHue(hueLo, hueHi, t), k = lo.k + (hi.k - lo.k) * t, s = lo.s + (hi.s - lo.s) * t;
-    const out = fromHcy(nh, Math.min(1, c * k), Math.min(1, Math.max(0, y + s)));
+    const L = (key) => lo[key] + (hi[key] - lo[key]) * t;
+    // a kept band leaves brightness alone
+    const ly = (a) => (a.keep ? y : a.y + (y - a.m) * a.g);
+    const ny = ly(lo) + (ly(hi) - ly(lo)) * t;
+    const out = fromHcy(lerpHue(hueLo, hueHi, t), Math.min(1, c * L('k')), Math.min(1, Math.max(0, ny)));
     data[i] = Math.round((r + (out[0] - r) * w) * 255);
     data[i + 1] = Math.round((g + (out[1] - g) * w) * 255);
     data[i + 2] = Math.round((b + (out[2] - b) * w) * 255);

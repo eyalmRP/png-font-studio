@@ -225,7 +225,7 @@ test('palette transfer recolours each colour band of a design towards its target
   const { remapPalette } = await import('../src/core/recolor.js');
   // a cyan face pixel, a dark blue rim pixel and a white highlight
   const data = new Uint8ClampedArray([40, 220, 255, 255, 20, 30, 120, 255, 250, 250, 255, 255]);
-  const anchors = [{ d: 0, hue: 45, k: 1, s: 0.1 }, { d: 50, hue: 10, k: 0.8, s: 0.1 }];
+  const anchors = [{ d: 0, hue: 45, k: 1, m: 0.6, y: 0.7, g: 1 }, { d: 50, hue: 10, k: 0.8, m: 0.2, y: 0.3, g: 1.5 }];
   remapPalette(data, 190, anchors);
   const hueOf = (r, g, b) => { const mx = Math.max(r, g, b), mn = Math.min(r, g, b), c = mx - mn; const h = mx === r ? ((g - b) / c) % 6 : mx === g ? (b - r) / c + 2 : (r - g) / c + 4; return (h * 60 + 360) % 360; };
   assert.ok(Math.abs(hueOf(data[0], data[1], data[2]) - 45) < 6, 'face becomes the face target');

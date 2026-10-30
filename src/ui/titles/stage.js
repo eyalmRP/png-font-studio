@@ -501,6 +501,11 @@ export function createStage() {
   const SENT = '\u200b';
   function resetIme() { ime.value = SENT; try { ime.setSelectionRange(1, 1); } catch { /* not focused */ } }
   function focusIme() {
+    // from a key press, wait: focus moved during keydown would receive that key (Enter would type a line break)
+    if (window.event && window.event.type === 'keydown') {
+      setTimeout(() => { if (state.edit) { ime.focus({ preventScroll: true }); resetIme(); } }, 0);
+      return;
+    }
     ime.focus({ preventScroll: true });
     if (!composing) resetIme();
     setTimeout(() => { if (state.edit && document.activeElement !== ime) { ime.focus({ preventScroll: true }); if (!composing) resetIme(); } }, 0);
@@ -617,7 +622,7 @@ export function createStage() {
     if (e.key === 't' || e.key === 'T') { setTool('text'); return; }
     if (e.key === 'v' || e.key === 'V') { setTool('select'); return; }
     if (e.key === 'h' || e.key === 'H') { setTool('hand'); return; }
-    if (layer && e.key === 'Enter') { enterEdit(layer.id); focusIme(); return; }
+    if (layer && e.key === 'Enter') { e.preventDefault(); enterEdit(layer.id); focusIme(); return; }
     if (layer && !layer.locked && e.key.startsWith('Arrow')) {
       e.preventDefault();
       const d = e.shiftKey ? 10 : 1;

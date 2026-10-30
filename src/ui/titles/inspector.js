@@ -3,7 +3,7 @@ import { h, clear, icon, storeSet } from '../dom.js';
 import { t } from '../i18n.js';
 import { numberField, angleField, pills, toggle, section, tabs, select, button, iconButton, colorField, gradientField, menu } from '../controls.js';
 import { state, on, emit, selectedLayer, checkpoint, projectChanged, newEffect, getFont } from '../../app/store.js';
-import { currentCharStyle, currentParaStyle, setChar, setPara, isCollapsedEdit, setLayerText, exitEdit } from '../../app/textedit.js';
+import { currentCharStyle, currentParaStyle, setChar, setPara, isCollapsedEdit, setLayerText, enterEdit } from '../../app/textedit.js';
 import { EFFECTS, EFFECT_ORDER, BLEND_MODES, STYLE_PRESETS } from '../../core/effects-def.js';
 import { WARP_STYLES, warpPoint, DEFAULT_WARP } from '../../core/warp.js';
 import { IN_PRESETS, OUT_PRESETS, LOOP_PRESETS, ORDERS } from '../../core/anim.js';
@@ -90,9 +90,22 @@ export function createInspector() {
   function buildCharacter(layer) {
     const cs = () => currentCharStyle(layer) || {};
     // a plain text box: the same text as on the stage, for long edits, pasting, or typing on a phone
+    // letters selected in the box are the letters the settings below apply to, as when selecting on the stage
+    const cp = (str, i) => [...str.slice(0, i)].length; // the box counts UTF-16 units, the title counts characters
+    const syncSel = () => {
+      if (document.activeElement !== box) return;
+      const a = cp(box.value, box.selectionStart), b = cp(box.value, box.selectionEnd), back = box.selectionDirection === 'backward';
+      if (!state.edit || state.edit.layerId !== layer.id) enterEdit(layer.id, a);
+      Object.assign(state.edit, { anchor: back ? b : a, caret: back ? a : b, typing: null, goalX: null });
+      emit('edit');
+    };
     const box = h('textarea.text-area.title-text', {
       rows: 3, dir: 'auto', 'aria-label': t('Text'), placeholder: t('Type the title text'),
-      on: { input: (e) => setLayerText(layer, e.target.value), focus: () => { if (state.edit) exitEdit(); }, keydown: (e) => e.stopPropagation() },
+      on: {
+        input: (e) => { setLayerText(layer, e.target.value); syncSel(); },
+        focus: syncSel, select: syncSel, keyup: syncSel, pointerup: syncSel,
+        keydown: (e) => e.stopPropagation(),
+      },
     });
     reg(() => { if (document.activeElement !== box) box.value = layer.doc.chars.join(''); });
     body.appendChild(section({ id: 'ch-text', title: t('Text'), iconName: 'type' }, box));

@@ -11,6 +11,7 @@
   --fg-2: #4a4659;
   --muted: #66617a;
   --tab-on: #ffffff;
+  --accent-2: var(--cyan);
   --accent: #d81b78;
   --accent-fg: #ffffff;
   --accent-soft: #fbe1ee;
@@ -50,11 +51,12 @@
   color-scheme: dark;
 }
 /* Animated mode (video) turns the interface accent blue; Still (PNG titles) keeps the pink */
-:root[data-mode="animated"] { --accent: #1a62d6; --accent-fg: #ffffff; --accent-soft: #dde9fc; }
+/* Still runs pink to blue (--accent to --accent-2), Animated the other way round */
+:root[data-mode="animated"] { --accent: #1a62d6; --accent-fg: #ffffff; --accent-soft: #dde9fc; --accent-2: #d81b78; }
 @media (prefers-color-scheme: dark) {
-  :root[data-mode="animated"]:not([data-theme="light"]) { --accent: #4aa3ff; --accent-fg: #06121f; --accent-soft: #15263d; }
+  :root[data-mode="animated"]:not([data-theme="light"]) { --accent: #4aa3ff; --accent-fg: #06121f; --accent-soft: #15263d; --accent-2: #ff4fa3; }
 }
-:root[data-mode="animated"][data-theme="dark"] { --accent: #4aa3ff; --accent-fg: #06121f; --accent-soft: #15263d; }
+:root[data-mode="animated"][data-theme="dark"] { --accent: #4aa3ff; --accent-fg: #06121f; --accent-soft: #15263d; --accent-2: #ff4fa3; }
 /* the Fonts workspace keeps one accent of its own: still or animated is a title setting */
 :root[data-workspace="fonts"][data-mode] { --accent: #6b3fe0; --accent-fg: #ffffff; --accent-soft: #ece6fd; }
 @media (prefers-color-scheme: dark) {
@@ -418,7 +420,8 @@ button { cursor: pointer; }
 /* loading screen */
 .boot { position: fixed; inset: 0; display: grid; place-items: center; background: var(--bg); z-index: 50; }
 .boot-card { width: min(360px, calc(100vw - 32px)); display: flex; flex-direction: column; gap: 14px; }
-.boot-title { font-weight: 700; font-size: 24px; letter-spacing: 0.01em; background: linear-gradient(90deg, var(--accent), var(--cyan)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+/* as wide as the words, so they run the whole gradient (across the card they only reached its middle) */
+.boot-title { width: fit-content; font-weight: 700; font-size: 24px; letter-spacing: 0.01em; background: linear-gradient(90deg, var(--accent), var(--accent-2)); -webkit-background-clip: text; background-clip: text; color: transparent; }
 .boot-bar { height: 8px; }
 .boot-row { display: flex; justify-content: space-between; gap: 12px; color: var(--muted); font-size: 13px; }
 .boot-pct { font-variant-numeric: tabular-nums; color: var(--fg-2); }
@@ -474,6 +477,20 @@ button { cursor: pointer; }
   body { overflow: hidden; }
   #app { height: 100vh; height: 100dvh; grid-template-rows: auto minmax(0, 1fr); }
   .topbar .lang-pills { display: none; }
+  /* one row of icons on top (each keeps its name as a tooltip and for screen readers): two rows took a fifth of the screen */
+  .topbar { flex-wrap: nowrap; gap: 4px; padding-block: 6px; }
+  .topbar .brand, .topbar .theme-btn, .mode-tabs .tab-label { display: none; }
+  .mode-tabs .tab { padding-inline: 11px; }
+  .mode-switch .pill span, :root[data-workspace="titles"] .export-slot .btn-primary span { display: none; }
+  .mode-switch .pill { padding-inline: 10px; }
+  :root[data-workspace="titles"] .export-slot .btn-primary { padding-inline: 10px; }
+  .topbar .group { gap: 2px; }
+  /* the player in one row: play, position, hold and loop (the clock and Go to start give way; the bar shows where it is) */
+  .player { flex-wrap: nowrap; gap: 6px; padding: 6px 10px; }
+  .player .tl-time, .player > .icon-btn:first-child, .player .toggle-label, .player-hold .nf-label span { display: none; }
+  .player-scrub { min-width: 0; }
+  .player-hold { width: 96px; flex: none; }
+  .player .toggle { flex: none; }
   .workspace { grid-template-rows: minmax(0, 1fr) auto; min-height: 0; }
   .workspace .center { grid-row: 1; height: auto; min-height: 0; }
   .workspace > .phone-sheet {
@@ -495,7 +512,7 @@ button { cursor: pointer; }
   .phone-sheet .panel-right > div { height: 100%; }
   /* all ten stage tools in one row on a 390 px phone; narrower screens wrap to two */
   .stage-bar { gap: 2px; max-width: calc(100% - 20px); flex-wrap: wrap; }
-  .stage-bar .icon-btn { width: 33px; height: 34px; }
+  .stage-bar .icon-btn { width: 31px; height: 34px; }
   .stage-bar .divider { display: none; }
   .stage-bar .zoom-label { min-width: 40px; }
 }

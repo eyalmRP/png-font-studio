@@ -52,11 +52,12 @@ export function render() {
   });
   undoBtn = iconButton('undo', t('Undo') + ' (Ctrl+Z)', () => doUndo());
   redoBtn = iconButton('redo', t('Redo') + ' (Ctrl+Shift+Z)', () => doRedo());
-  const themeBtn = iconButton(isDark() ? 'sun' : 'moon', t('Light / dark'), () => {
+  const flipTheme = () => {
     setUI({ theme: isDark() ? 'light' : 'dark' }); applyTheme();
     themeBtn.replaceChildren(icon(isDark() ? 'sun' : 'moon', 16));
     emit('theme');
-  });
+  };
+  const themeBtn = iconButton(isDark() ? 'sun' : 'moon', t('Light / dark'), flipTheme, { class: 'theme-btn' });
   const langPills = h('div.pills.lang-pills', { role: 'group', 'aria-label': t('Language') },
     ['en', 'he'].map((l) => h('button.pill', { type: 'button', class: getLang() === l ? 'on' : '', on: { click: () => { setLang(l); render(); } } }, l === 'en' ? 'EN' : 'עב')));
   const helpBtn = iconButton('help', t('Help'), (e) => menu(e.currentTarget, [
@@ -64,6 +65,8 @@ export function render() {
     { label: t('Keyboard shortcuts'), icon: 'keyboard', hint: '?', onClick: () => showShortcuts() },
     // the language pills give way on phones, so the switch is here too
     { label: getLang() === 'he' ? 'English' : 'עברית', icon: 'languages', onClick: () => { setLang(getLang() === 'he' ? 'en' : 'he'); render(); } },
+    // on phones the theme button gives way to keep the top bar to one row
+    ...(getComputedStyle(themeBtn).display === 'none' ? [{ label: t('Light / dark'), icon: isDark() ? 'sun' : 'moon', onClick: flipTheme }] : []),
   ]));
   const exportSlot = h('div.group.export-slot');
   const bar = h('header.topbar', brand, modeTabs, h('div.spacer'), h('div.group', undoBtn, redoBtn), exportSlot, h('div.group', helpBtn, themeBtn), langPills);

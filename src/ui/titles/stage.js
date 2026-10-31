@@ -21,7 +21,7 @@ export function createStage() {
   toolBtns.text = iconButton('textCursor', t('Text tool') + ' (T)', () => setTool('text'));
   toolBtns.hand = iconButton('hand', t('Pan') + ' (H)', () => setTool('hand'));
   const guidesBtn = iconButton('baseline', t('Show text guides while editing'), () => { view.guides = !view.guides; guidesBtn.classList.toggle('on', view.guides); request(); });
-  const safeBtn = iconButton('scan', t('Title-safe guides'), () => { state.project.artboard.safe = !state.project.artboard.safe; safeBtn.classList.toggle('on', state.project.artboard.safe); request(); });
+  const safeBtn = iconButton('safeArea', t('Title-safe guides'), () => { state.project.artboard.safe = !state.project.artboard.safe; safeBtn.classList.toggle('on', state.project.artboard.safe); request(); });
   // preview background: only for looking at the title; exports stay transparent unless the artboard has a colour
   let stageBg = storeGet('stageBg', 'checker');
   let layerBuf = null; // titles composited on their own over a transparent artboard
@@ -55,10 +55,14 @@ export function createStage() {
   const toArtboard = (cx, cy) => viewMatrix().inverse().transformPoint(new DOMPoint(cx, cy));
   function fit() {
     const ab = state.project.artboard;
-    const pad = 48;
-    view.zoom = Math.max(0.02, Math.min((W - pad * 2) / ab.w, (H - pad * 2 - 30) / ab.h));
+    // room around the artboard: generous on a desktop, a little on a phone (a fixed 48 px left a phone's stage with
+    // almost nothing), below the toolbar and clear of the hint at the bottom
+    const pad = Math.round(Math.min(48, Math.max(10, Math.min(W, H) * 0.06)));
+    const top = Math.max(pad, bar.offsetTop + bar.offsetHeight + 8);
+    const bottom = Math.max(pad, hint.offsetHeight ? hint.offsetHeight + 20 : 0);
+    view.zoom = Math.max(0.02, Math.min((W - pad * 2) / ab.w, (H - top - bottom) / ab.h));
     view.panX = (W - ab.w * view.zoom) / 2;
-    view.panY = (H - ab.h * view.zoom) / 2 + 12;
+    view.panY = top + (H - top - bottom - ab.h * view.zoom) / 2;
     view.fitted = true;
     request();
   }

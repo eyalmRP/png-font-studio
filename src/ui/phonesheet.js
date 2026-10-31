@@ -20,7 +20,7 @@ export function phoneSheet(workspace, pages) {
     const top = el.parentElement ? el.parentElement.getBoundingClientRect().top : 0;
     const peek = head.offsetHeight || 58;
     // full still leaves the stage (and the player under it) a strip to work in
-    return { peek, half: Math.round((innerHeight - top) * 0.48), full: Math.round(innerHeight - top - 230) };
+    return { peek, half: Math.round((innerHeight - top) * 0.4), full: Math.round(innerHeight - top - 230) };
   };
   function apply(animate = true) {
     el.dataset.page = page; el.dataset.size = size;

@@ -43,19 +43,22 @@ export function phoneSheet(workspace, pages) {
   // drag the head to resize; let go and it settles on the nearest height
   head.addEventListener('pointerdown', (e) => {
     if (e.target.closest('.sheet-tab')) return;
-    const y0 = e.clientY, h0 = el.offsetHeight;
-    let moved = false;
+    // measured once: reading the layout on every move forced an extra layout pass each time
+    const y0 = e.clientY, h0 = el.offsetHeight, hs = heights();
+    let moved = false, want = h0, frame = 0;
     head.setPointerCapture(e.pointerId);
     el.classList.remove('animate');
     const mv = (ev) => {
       const dy = ev.clientY - y0;
       if (!moved && Math.abs(dy) < 4) return;
       moved = true;
-      const hs = heights();
-      el.style.setProperty('--sheet-h', Math.max(hs.peek, Math.min(hs.full, h0 - dy)) + 'px');
+      want = Math.max(hs.peek, Math.min(hs.full, h0 - dy));
+      // at most one new height per frame (a finger sends several moves per frame)
+      frame ||= requestAnimationFrame(() => { frame = 0; el.style.setProperty('--sheet-h', want + 'px'); });
     };
     const up = () => {
       head.removeEventListener('pointermove', mv); head.removeEventListener('pointerup', up); head.removeEventListener('pointercancel', up);
+      if (frame) { cancelAnimationFrame(frame); frame = 0; el.style.setProperty('--sheet-h', want + 'px'); }
       if (!moved) { if (e.target.closest('.sheet-grip')) { size = SIZES[(SIZES.indexOf(size) + 1) % 3]; storeSet('sheetSize', size); apply(); } return; }
       const hs = heights(), cur = el.offsetHeight;
       size = SIZES.reduce((a, b) => (Math.abs(hs[b] - cur) < Math.abs(hs[a] - cur) ? b : a));

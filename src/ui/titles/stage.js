@@ -74,13 +74,36 @@ export function createStage() {
     view.fitted = false;
     request();
   }
+  // While the stage keeps changing size (dragging the phone panel), each frame is drawn at once from the titles as last
+  // rendered, scaled; they are rendered sharp again once the size settles. Resizing the canvas wipes it, and rendering
+  // text and effects at every new zoom took longer than a frame on a phone: the preview flickered or went blank.
+  // The first resize of a run keeps a snapshot of the preview as it was; until the size settles, frames show that
+  // snapshot moved and scaled to the new view (one image copy a frame), then the titles are drawn sharp again.
+  let live = false, settle = 0, snap = null, snapBase = null;
   function resize() {
     const r = el.getBoundingClientRect();
+    if (!live && view.inited && canvas.width > 1) {
+      snap = document.createElement('canvas'); snap.width = canvas.width; snap.height = canvas.height;
+      snap.getContext('2d').drawImage(canvas, 0, 0);
+      snapBase = new DOMMatrix().scale(dpr).multiply(viewMatrix());
+    }
     dpr = Math.min(3, window.devicePixelRatio || 1);
     W = r.width; H = r.height;
     canvas.width = Math.max(1, Math.round(W * dpr)); canvas.height = Math.max(1, Math.round(H * dpr));
     if (view.fitted || !view.inited) { fit(); view.inited = true; }
-    request();
+    live = true;
+    draw(); // now, not next frame: the canvas was just cleared and would be shown empty
+    clearTimeout(settle);
+    settle = setTimeout(() => { live = false; snap = null; request(); }, 180);
+  }
+  function drawLive() {
+    const ctx = canvas.getContext('2d');
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.fillStyle = cssVar('--stage');
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.setTransform(new DOMMatrix().scale(dpr).multiply(viewMatrix()).multiply(snapBase.inverse()));
+    ctx.drawImage(snap, 0, 0);
+    zoomLabel.textContent = Math.round(view.zoom * 100) + '%';
   }
   const ro = new ResizeObserver(() => resize());
   ro.observe(el);
@@ -152,6 +175,7 @@ export function createStage() {
 
   function draw() {
     if (!state.project) return;
+    if (live && snap) { drawLive(); return; }
     const ctx = canvas.getContext('2d');
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -175,13 +199,13 @@ export function createStage() {
     // layers (clipped to the artboard edge lightly: draw outside at reduced opacity). On a transparent artboard
     // they are composited on their own first, so blend modes act as in the exported file, not on the preview backdrop.
     ctx.save();
-    if (ab.bg === 'color') drawLayers(ctx, state.project, state.time, base, { showMissing: true });
+    if (ab.bg === 'color') drawLayers(ctx, state.project, state.time, base, { showMissing: true, anyScale: live });
     else {
       if (!layerBuf || layerBuf.width !== canvas.width || layerBuf.height !== canvas.height) { layerBuf = document.createElement('canvas'); layerBuf.width = canvas.width; layerBuf.height = canvas.height; }
       const lctx = layerBuf.getContext('2d');
       lctx.setTransform(1, 0, 0, 1, 0, 0);
       lctx.clearRect(0, 0, layerBuf.width, layerBuf.height);
-      drawLayers(lctx, state.project, state.time, base, { showMissing: true });
+      drawLayers(lctx, state.project, state.time, base, { showMissing: true, anyScale: live });
       ctx.setTransform(1, 0, 0, 1, 0, 0);
       ctx.drawImage(layerBuf, 0, 0);
     }
@@ -703,7 +727,7 @@ export function createStage() {
 
   return {
     el, request, fit, focusIme,
-    destroy() { offs.forEach((f) => f()); ro.disconnect(); clearInterval(blinkTimer); window.removeEventListener('keyup', keyUp); },
+    destroy() { offs.forEach((f) => f()); ro.disconnect(); clearInterval(blinkTimer); clearTimeout(settle); window.removeEventListener('keyup', keyUp); },
   };
 }
 

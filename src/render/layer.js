@@ -54,8 +54,11 @@ export function renderLayer(layer, time, scale, opts = {}) {
     if (!anim.visible) return null;
   }
   const animKey = anim && anim.active ? time.toFixed(4) : 'static';
-  const key = `${layer.rev}:${layer.layoutRev}:${scale.toFixed(4)}:${animKey}:${opts.showMissing ? 1 : 0}:${opts.noAnim ? 1 : 0}`;
+  const same = `${layer.rev}:${layer.layoutRev}:${animKey}:${opts.showMissing ? 1 : 0}:${opts.noAnim ? 1 : 0}`;
+  const key = `${same}:${scale.toFixed(4)}`;
   if (c.renderKey === key && c.result) return c.result;
+  // anyScale: the last render will do at another size (drawn scaled, a little soft) while the view is being resized
+  if (opts.anyScale && c.renderSame === same && c.result) return c.result;
   const prep = prepareText(layer, layout, anim);
   const pad = 2 / scale;
   let rect = { x: prep.bounds.x - pad, y: prep.bounds.y - pad, w: prep.bounds.w + pad * 2, h: prep.bounds.h + pad * 2 };
@@ -90,6 +93,7 @@ export function renderLayer(layer, time, scale, opts = {}) {
     if (fx.passes) { passes = fx.passes; main = fx.main; }
   }
   c.renderKey = key;
+  c.renderSame = same;
   // canvas is the whole layer; passes + main (when set) let effect blend modes reach the layers underneath
   c.result = { canvas, rect, contentRect, layout, anim, passes, main };
   return c.result;

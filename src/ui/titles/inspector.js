@@ -186,7 +186,6 @@ export function createInspector() {
     const light = nf('light', { label: t('Lightness'), min: -100, max: 100, step: 1, unit: '%', slider: true });
     const tcol = colorField({ label: t('Colour'), value: cs().tintColor, onInput: (v) => setChar({ tintColor: v }, 'char:tc'), onChange: (v) => setChar({ tintColor: v }, 'char:tc') });
     const tamt = nf('tintAmount', { label: t('Amount'), min: 0, max: 100, step: 1, unit: '%', slider: true });
-    const op = nf('opacity', { label: t('Opacity'), iconName: 'droplet', min: 0, max: 100, step: 1, unit: '%', slider: true });
     function refreshTint() {
       const m = cs().tintMode;
       tint.setValue(m);
@@ -195,8 +194,12 @@ export function createInspector() {
       tcol.setValue(cs().tintColor);
     }
     reg(refreshTint);
-    body.appendChild(section({ id: 'ch-color', title: t('Colour'), iconName: 'palette', onReset: resetChar(['tintMode', 'hue', 'sat', 'light', 'tintColor', 'tintAmount', 'opacity']) },
-      h('p.hint', t('Recolour the glyph artwork itself: select letters while typing to colour just those.')), tint, hue, sat, light, tcol, tamt, op));
+    body.appendChild(section({ id: 'ch-color', title: t('Colour'), iconName: 'palette', onReset: resetChar(['tintMode', 'hue', 'sat', 'light', 'tintColor', 'tintAmount']) },
+      h('p.hint', t('Recolour the glyph artwork itself: select letters while typing to colour just those.')), tint, hue, sat, light, tcol, tamt));
+    // the letters' own opacity, apart from the colour controls so it is not read as Colourise's strength
+    body.appendChild(section({ id: 'ch-opacity', title: t('Opacity'), iconName: 'droplet', onReset: resetChar(['opacity']) },
+      nf('opacity', { label: t('Letter opacity'), min: 0, max: 100, step: 1, unit: '%', slider: true }),
+      h('p.hint', t('Fades the selected letters, or the whole title, together with their stroke and shadow. The Layer tab’s opacity fades the whole layer.'))));
   }
 
   // ---------- paragraph ----------

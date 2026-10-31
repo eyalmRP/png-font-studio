@@ -712,4 +712,6 @@ export const HE = {
   'PNG, GIF, WebM, MP4, animated PNG or WebP, a PNG sequence, or an editable After Effects composition.': 'PNG,‏ GIF,‏ WebM,‏ MP4,‏ PNG או WebP מונפשים, רצף PNG, או קומפוזיציה של After Effects שאפשר לערוך.',
   'Edit': 'עריכה',
   'Resize the panel': 'שינוי גובה הלוח',
+  'Letter opacity': 'אטימות האותיות',
+  'Fades the selected letters, or the whole title, together with their stroke and shadow. The Layer tab’s opacity fades the whole layer.': 'מעמעם את האותיות שנבחרו, או את כל הכותרת, יחד עם קו המתאר והצל שלהן. האטימות בלשונית השכבה מעמעמת את כל השכבה.',
 };

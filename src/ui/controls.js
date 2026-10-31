@@ -365,7 +365,14 @@ export function toast(msg, kind = 'info', ms = 3200, action = null) {
   const btn = action ? h('button.toast-action', { type: 'button', on: { click: () => { close(); action.onClick(); } } }, action.label) : null;
   const el = h('div.toast', { class: 'toast-' + kind }, icon(kind === 'error' ? 'alert' : kind === 'ok' ? 'check' : 'info', 16), h('span', msg), btn);
   toastHost.appendChild(el);
-  setTimeout(close, action ? Math.max(ms, 6000) : ms);
+  // a message with a button waits while the pointer or the keyboard is on it
+  let timer = setTimeout(close, action ? Math.max(ms, 6000) : ms);
+  if (action) {
+    const hold = () => clearTimeout(timer);
+    const go = () => { clearTimeout(timer); timer = setTimeout(close, 2500); };
+    el.addEventListener('pointerenter', hold); el.addEventListener('focusin', hold);
+    el.addEventListener('pointerleave', go); el.addEventListener('focusout', go);
+  }
 }
 
 /** Modal dialog. Returns { el, close }. */
@@ -376,14 +383,30 @@ export function modal(o) {
   const box = h('div.modal', { role: 'dialog', 'aria-modal': 'true', 'aria-label': o.title, class: o.class || '' },
     h('div.modal-head', o.iconName ? icon(o.iconName, 18) : null, h('h2', o.title), closeBtn), body, foot);
   const back = h('div.modal-back', box);
-  const onKey = (e) => { if (e.key === 'Escape') { e.stopPropagation(); close(); } };
+  const opener = document.activeElement;
+  const onKey = (e) => {
+    if (e.key === 'Escape') { e.stopPropagation(); close(); return; }
+    // Tab stays inside the dialog
+    if (e.key !== 'Tab') return;
+    const f = [...box.querySelectorAll('button, input, select, textarea, [tabindex]:not([tabindex="-1"])')].filter((x) => !x.disabled && x.offsetParent);
+    if (!f.length) return;
+    const first = f[0], last = f[f.length - 1], at = document.activeElement;
+    if (!box.contains(at) || at === box) { if (e.shiftKey) { e.preventDefault(); last.focus(); } else if (at !== box) { e.preventDefault(); first.focus(); } }
+    else if (e.shiftKey && at === first) { e.preventDefault(); last.focus(); }
+    else if (!e.shiftKey && at === last) { e.preventDefault(); first.focus(); }
+  };
   function close(result) {
     back.remove(); window.removeEventListener('keydown', onKey, true);
+    // back to where the keyboard was before the dialog opened
+    if (opener && opener.isConnected && opener !== document.body) opener.focus({ preventScroll: true });
     o.onClose && o.onClose(result);
   }
   back.addEventListener('pointerdown', (e) => { if (e.target === back && o.dismissable !== false) close(); });
   window.addEventListener('keydown', onKey, true);
   document.body.appendChild(back);
+  // the dialog takes the focus (a dialog that focuses a field of its own does so right after)
+  box.tabIndex = -1;
+  box.focus({ preventScroll: true });
   return { el: box, body, foot, close };
 }
 
@@ -419,9 +442,11 @@ export function promptDialog(title, label, value = '') {
 
 /** Dropdown menu anchored to an element. items: [{ label, icon, onClick, danger, disabled } | '-'] */
 export function menu(anchor, items) {
+  // the keyboard goes back to the button that opened the menu, so a dialog opened from it returns there too
+  const back = () => { if (anchor && anchor.isConnected) anchor.focus({ preventScroll: true }); };
   const el = h('div.menu', { role: 'menu' }, items.map((it) => it === '-' ? h('div.menu-sep') : h('button.menu-item', {
-    type: 'button', role: 'menuitem', disabled: it.disabled, class: it.danger ? 'danger' : '',
-    on: { click: () => { close(); it.onClick && it.onClick(); } },
+    type: 'button', role: 'menuitem', tabIndex: -1, disabled: it.disabled, class: it.danger ? 'danger' : '',
+    on: { click: () => { close(); back(); it.onClick && it.onClick(); } },
   }, it.swatch ? h('span.menu-swatch', { style: { background: it.swatch } }) : it.icon ? icon(it.icon, 15) : h('span.menu-ic'), h('span', it.label), it.hint ? h('span.menu-hint', it.hint) : null)));
   document.body.appendChild(el);
   const r = anchor.getBoundingClientRect();
@@ -433,7 +458,20 @@ export function menu(anchor, items) {
   if (y + mh > innerHeight - 8) y = Math.max(8, r.top - mh - 4);
   el.style.left = x + 'px'; el.style.top = y + 'px';
   const off = (e) => { if (!el.contains(e.target)) close(); };
-  const key = (e) => { if (e.key === 'Escape') close(); };
+  // arrows move between the items (and nowhere else: not the selected title on the stage), Esc or Tab leaves
+  const btns = [...el.querySelectorAll('.menu-item:not(:disabled)')];
+  const key = (e) => {
+    const i = btns.indexOf(document.activeElement), n = btns.length;
+    let j = -1;
+    if (e.key === 'ArrowDown') j = i < 0 ? 0 : (i + 1) % n;
+    else if (e.key === 'ArrowUp') j = i < 0 ? n - 1 : (i - 1 + n) % n;
+    else if (e.key === 'Home') j = 0;
+    else if (e.key === 'End') j = n - 1;
+    if (j >= 0 && n) { e.preventDefault(); e.stopPropagation(); btns[j].focus(); return; }
+    if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); close(); back(); }
+    else if (e.key === 'Tab') close();
+  };
+  btns[0]?.focus({ preventScroll: true });
   setTimeout(() => { window.addEventListener('pointerdown', off, true); window.addEventListener('keydown', key, true); });
   function close() { el.remove(); window.removeEventListener('pointerdown', off, true); window.removeEventListener('keydown', key, true); }
   return { close };

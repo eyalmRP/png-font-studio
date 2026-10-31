@@ -26,6 +26,9 @@ export function phoneSheet(workspace, pages) {
     el.dataset.page = page; el.dataset.size = size;
     el.classList.toggle('animate', animate);
     el.style.setProperty('--sheet-h', heights()[size] + 'px');
+    // messages pop up above the sheet, not over it
+    if (getComputedStyle(el).display === 'contents') document.documentElement.style.removeProperty('--sheet-offset');
+    else document.documentElement.style.setProperty('--sheet-offset', heights()[size] + 'px');
     btns.forEach((b, i) => { const on_ = pages[i].id === page; b.classList.toggle('on', on_); b.setAttribute('aria-selected', on_); });
     emit('resize');
   }
@@ -62,6 +65,9 @@ export function phoneSheet(workspace, pages) {
     head.addEventListener('pointermove', mv); head.addEventListener('pointerup', up); head.addEventListener('pointercancel', up);
   });
 
+  // Enter or Space on the handle steps through the heights, as a tap does (a keyboard click has no pointer)
+  grip.addEventListener('click', (e) => { if (e.detail === 0) { size = SIZES[(SIZES.indexOf(size) + 1) % 3]; storeSet('sheetSize', size); apply(); } });
+
   const onResize = () => apply(false);
   window.addEventListener('resize', onResize);
   // the top bar can change height after the first layout (it wraps on phones), which moves the space the sheet has
@@ -70,6 +76,6 @@ export function phoneSheet(workspace, pages) {
   requestAnimationFrame(() => { apply(false); if (el.parentElement) ro.observe(el.parentElement); });
   return {
     el,
-    destroy() { window.removeEventListener('resize', onResize); ro.disconnect(); off(); },
+    destroy() { window.removeEventListener('resize', onResize); ro.disconnect(); off(); document.documentElement.style.removeProperty('--sheet-offset'); },
   };
 }

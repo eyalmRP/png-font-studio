@@ -27,3 +27,6 @@ export function t(s, vars) {
 
 /** Keep a left-to-right fragment such as 1920×1080 in order inside right-to-left text (Unicode isolate). */
 export const ltr = (s) => `\u2066${s}\u2069`;
+/** Text the user typed (a title, a character) set inside a message: kept apart from the text around it, so its own
+ * direction holds and its punctuation stays put (“Hello!” in a Hebrew sentence). */
+export const iso = (s) => `\u2068${s}\u2069`;

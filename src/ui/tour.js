@@ -22,6 +22,7 @@ export function maybeStartTour() {
 let running = null;
 export function startTour() {
   if (running) return;
+  const opener = document.activeElement;
   let i = 0;
   const ring = h('div.tour-ring');
   const count = h('span.tour-count', { dir: 'ltr' });
@@ -97,6 +98,7 @@ export function startTour() {
     window.removeEventListener('scroll', onMove, true);
     el.remove();
     running = null;
+    if (opener && opener.isConnected && opener !== document.body) opener.focus({ preventScroll: true });
   }
 
   go(0);

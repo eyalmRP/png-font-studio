@@ -1,6 +1,6 @@
 // Fonts mode: font library (left), glyph sheet (centre), glyph and font inspector (right).
 import { h, clear, icon, pickFiles, storeGet, storeSet, rafThrottle } from '../dom.js';
-import { t } from '../i18n.js';
+import { t, iso } from '../i18n.js';
 import {
   section, iconButton, button, numberField, pills, toggle, select, toast, confirmDialog, promptDialog, menu, colorField, gradientField, hexToRgb,
 } from '../controls.js';
@@ -245,7 +245,29 @@ export function mountFonts({ left, right, center, exportSlot }) {
   const testCanvas = h('canvas', { style: { display: 'block', maxWidth: '100%' } });
   const testStrip = h('div', { style: { background: 'var(--panel)', border: '1px solid var(--line)', borderRadius: 'var(--r)', padding: '10px', marginBottom: '12px', display: 'flex', flexDirection: 'column', gap: '8px' } }, testInput, h('div', { style: { overflowX: 'auto' } }, testCanvas));
   const sheetBar = h('div.sheet-bar', searchInput, filterSel, zoomF, guidesBtn, addBtn);
-  const sheet = h('div.sheet', { role: 'grid', 'aria-label': t('Glyph sheet') });
+  // a list of options in groups, one Tab stop: the arrows move by what is on screen (so right-to-left groups work too),
+  // Enter or Space selects, Shift or Ctrl with it adds to the selection
+  const sheet = h('div.sheet', { role: 'listbox', 'aria-multiselectable': 'true', 'aria-label': t('Glyph sheet') });
+  sheet.addEventListener('keydown', (e) => {
+    const dir = { ArrowRight: [1, 0], ArrowLeft: [-1, 0], ArrowDown: [0, 1], ArrowUp: [0, -1] }[e.key];
+    const cur = document.activeElement;
+    if (!dir || !cur || !cur.classList.contains('cell')) return;
+    e.preventDefault(); e.stopPropagation();
+    const a = cur.getBoundingClientRect(), ax = a.left + a.width / 2, ay = a.top + a.height / 2;
+    let best = null, bestD = Infinity;
+    for (const c of sheet.querySelectorAll('.cell')) {
+      if (c === cur) continue;
+      const r = c.getBoundingClientRect(), dx = r.left + r.width / 2 - ax, dy = r.top + r.height / 2 - ay;
+      // ahead in that direction; sideways moves stay on the row, up and down prefer the same column
+      const along = dx * dir[0] + dy * dir[1];
+      if (along <= 1) continue;
+      const across = dir[0] ? Math.abs(dy) : Math.abs(dx);
+      if (dir[0] && across > a.height / 2) continue;
+      const d = along + across * 3;
+      if (d < bestD) { bestD = d; best = c; }
+    }
+    if (best) { cur.tabIndex = -1; best.tabIndex = 0; best.focus(); }
+  });
   sheet.style.setProperty('--cell', state.ui.glyphZoom + 'px');
   // the toolbar sits in the scrolling area and sticks to its top, so it pushes the content down however many rows it wraps to
   const wrap = h('div.sheet-wrap', sheetBar, testStrip, sheet);
@@ -296,14 +318,15 @@ export function mountFonts({ left, right, center, exportSlot }) {
       if (groupOf(ch) !== gid) {
         gid = groupOf(ch);
         if (multi) sheet.appendChild(h('div.sheet-group-title', t(GROUP_LABEL[gid])));
-        grid = h('div.sheet-grid', { role: 'rowgroup', dir: gid === 'hebrew' ? 'rtl' : 'ltr', 'aria-label': t(GROUP_LABEL[gid]) });
+        grid = h('div.sheet-grid', { role: 'group', dir: gid === 'hebrew' ? 'rtl' : 'ltr', 'aria-label': t(GROUP_LABEL[gid]) });
         sheet.appendChild(grid);
       }
       const g = font.glyphs.get(ch);
       const canvas = h('canvas', { 'aria-hidden': 'true' });
       const has = g && g.image;
       const cell = h('div.cell', {
-        role: 'gridcell', tabIndex: 0, title: `${ch} · ${charLabel(ch)}`, 'aria-label': `${ch} ${charLabel(ch)}${has ? '' : ' ' + t('empty')}`,
+        role: 'option', tabIndex: ch === (state.selectedGlyph ?? chars[0]) ? 0 : -1, 'aria-selected': String(state.selectedGlyphs.has(ch) || ch === state.selectedGlyph),
+        title: `${ch} · ${charLabel(ch)}`, 'aria-label': `${ch} ${charLabel(ch)}${has ? '' : ' ' + t('empty')}`,
         class: (ch === state.selectedGlyph ? 'on ' : '') + (state.selectedGlyphs.has(ch) && ch !== state.selectedGlyph ? 'multi ' : '') + (has ? '' : 'empty-slot'),
         draggable: !!has,
         on: {
@@ -383,6 +406,8 @@ export function mountFonts({ left, right, center, exportSlot }) {
     state.selectedGlyphs.add(ch);
     state.selectedGlyph = ch;
     renderSheet(); renderInspector();
+    // the sheet was drawn again: the keyboard stays on the glyph it chose
+    if (e && e.type === 'keydown') sheet.querySelector('.cell[tabindex="0"]')?.focus();
   }
 
   const drawTest = rafThrottle(() => {
@@ -508,7 +533,7 @@ export function mountFonts({ left, right, center, exportSlot }) {
     }
     syncFields();
     const imgOp = (label, fn) => () => { checkpoint('font:' + font.id, label); g.image = fn(g.image); g.rev++; if (g.autoBaseline) autoMetrics(font); touch(font); afterFontEdit(font); };
-    const clearImage = () => { checkpoint('font:' + font.id, 'Clear glyph'); g.image = null; g.rev++; touch(font); afterFontEdit(font); undoToast(t('Cleared the image of “{c}”', { c: ch })); };
+    const clearImage = () => { checkpoint('font:' + font.id, 'Clear glyph'); g.image = null; g.rev++; touch(font); afterFontEdit(font); undoToast(t('Cleared the image of “{c}”', { c: iso(ch) })); };
     // the image fixes live in one menu, so the panel keeps to the everyday actions
     const imageBtn = menuButton({ label: t('Edit image'), icon: 'wand', onClick: (e) => menu(e.currentTarget, [
       { label: t('Flip ↔'), icon: 'flipH', onClick: imgOp('Flip', (im) => flipImage(im, true)) },
@@ -602,7 +627,7 @@ export function mountFonts({ left, right, center, exportSlot }) {
     state.selectedGlyph = null; state.selectedGlyphs.clear();
     afterFontEdit(font);
     // Undo in the message instead of asking first
-    undoToast(chars.length === 1 ? t('Deleted “{c}”', { c: chars[0] }) : t('Deleted {n} glyphs', { n: chars.length }));
+    undoToast(chars.length === 1 ? t('Deleted “{c}”', { c: iso(chars[0]) }) : t('Deleted {n} glyphs', { n: chars.length }));
   }
 
   function afterFontEdit(font, light = false) {

@@ -1,6 +1,6 @@
 // Titles mode: layers + artboard (left), stage + animation player (centre), inspector (right).
 import { h, clear, icon, storeSet } from '../dom.js';
-import { t, ltr } from '../i18n.js';
+import { t, ltr, iso } from '../i18n.js';
 import { section, iconButton, button, numberField, pills, colorField, select, menu } from '../controls.js';
 import { state, on, emit, selectLayer, checkpoint, projectChanged, newTextLayer, selectedLayer, createProject } from '../../app/store.js';
 import { createStage } from './stage.js';
@@ -148,7 +148,7 @@ export function mountTitles({ left, right, center, exportSlot, sizes, applySizes
     state.project.layers = state.project.layers.filter((x) => x !== l);
     selectLayer(null);
     projectChanged();
-    undoToast(t('Deleted {name}', { name: l.name || t('Text') }));
+    undoToast(t('Deleted {name}', { name: iso(l.name || t('Text')) }));
   }
   function newTitle() {
     checkpoint('project', 'New title');

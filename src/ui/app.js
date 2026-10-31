@@ -113,6 +113,7 @@ function onKey(e) {
   const typing = (tag === 'input' || tag === 'textarea' || tag === 'select' || e.target.isContentEditable) && !e.target.classList.contains('ime');
   const mod = e.ctrlKey || e.metaKey;
   if (state.edit && e.target.classList.contains('ime')) return; // the canvas editor handles its own keys
+  if (document.querySelector('.modal-back')) return; // a dialog is open: nothing reaches the page behind it
   if (typing) return;
   if (mod && e.key.toLowerCase() === 'z') { e.preventDefault(); e.shiftKey ? doRedo() : doUndo(); return; }
   if (mod && e.key.toLowerCase() === 'y') { e.preventDefault(); doRedo(); return; }

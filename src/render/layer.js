@@ -67,14 +67,24 @@ export function renderLayer(layer, time, scale, opts = {}) {
   const ctx = canvas.getContext('2d');
   ctx.imageSmoothingQuality = 'high';
   drawPrepared(ctx, prep, new DOMMatrix().scale(s).translate(-rect.x, -rect.y), { showMissing: opts.showMissing });
+  const hasFx = layer.effects && layer.effects.some((e) => e.enabled);
+  // see-through letters (character opacity, or a fade in the animation): effects measure the letters at full opacity
+  let shape = null;
+  if (hasFx && prep.draws.some((d) => d.alpha < 0.999)) {
+    shape = makeCanvas(rect.w * s, rect.h * s);
+    const sctx = shape.getContext('2d');
+    sctx.imageSmoothingQuality = 'high';
+    drawPrepared(sctx, prep, new DOMMatrix().scale(s).translate(-rect.x, -rect.y), { showMissing: opts.showMissing, fullAlpha: true });
+  }
   if (isEnvelopeWarp(layer.warp)) {
     const w = warpCanvas(canvas, rect, c.frame, layer.warp, s);
+    if (shape) shape = warpCanvas(shape, rect, c.frame, layer.warp, s).canvas;
     canvas = w.canvas; rect = w.rect;
   }
   const contentRect = rect;
   let passes = null, main = null;
-  if (layer.effects && layer.effects.some((e) => e.enabled)) {
-    const fx = applyEffects(canvas, layer.effects, s);
+  if (hasFx) {
+    const fx = applyEffects(canvas, layer.effects, s, shape);
     rect = { x: rect.x - fx.ox / s, y: rect.y - fx.oy / s, w: fx.canvas.width / s, h: fx.canvas.height / s };
     canvas = fx.canvas;
     if (fx.passes) { passes = fx.passes; main = fx.main; }

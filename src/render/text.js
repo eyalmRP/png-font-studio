@@ -125,7 +125,8 @@ export function drawPrepared(ctx, prep, base, opts = {}) {
   for (const d of prep.draws) {
     const { it, rect: r } = d;
     ctx.setTransform(base.multiply(d.M));
-    ctx.globalAlpha = Math.min(1, d.alpha);
+    // fullAlpha: the letters' shape for effects to measure, whatever their opacity
+    ctx.globalAlpha = opts.fullAlpha ? 1 : Math.min(1, d.alpha);
     const st = it.style;
     if (filters) {
       const f = [];

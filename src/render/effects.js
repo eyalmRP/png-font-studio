@@ -1,6 +1,6 @@
 // Layer effects on a premultiplied canvas: Photoshop-style layer styles plus Office-style extras.
 import { EFFECTS, effectMargin } from '../core/effects-def.js';
-import { distanceOutside, distanceInside, boxBlur, bevelShade, smoothstep } from '../core/fx.js';
+import { distanceOutside, distanceInside, boxBlur, bevelShade, smoothstep, nearestSeedValue } from '../core/fx.js';
 import { adjustHsl } from '../core/image.js';
 import { makeCanvas, canvasFilterSupported } from './glyphs.js';
 import { hexToRgb } from '../ui/controls.js';
@@ -121,9 +121,14 @@ function coverageCanvas(cov, W, H, e, box, fillKey = 'color') {
  * result, it also returns `passes` (each behind effect as { canvas, dx, dy, alpha, blend }, bottom first) and `main`
  * (the text with its other effects), so the effects can blend with what lies under the layer, as in Photoshop.
  */
-export function applyEffects(src, effects, scale) {
+export function applyEffects(src, effects, scale, shapeSrc = null) {
   const list = (effects || []).filter((e) => e.enabled && EFFECTS[e.type]);
   if (!list.length) return { canvas: src, ox: 0, oy: 0 };
+  // See-through letters (shapeSrc: the same letters at full opacity). Strokes, glows and bevels find the edge where the
+  // alpha crosses one half, so effects run on the full-opacity letters and each letter is then faded with its effects
+  // as one, as a layer's opacity would; nothing jumps when a letter's opacity passes 50%.
+  const seen = shapeSrc ? src : null;
+  if (shapeSrc) src = shapeSrc;
   const m = Math.ceil(Math.max(0, ...list.map(effectMargin)) * scale) + 2;
   const W = src.width + m * 2, H = src.height + m * 2;
   const base = copyCanvas(src, W, H, m, m);
@@ -203,6 +208,23 @@ export function applyEffects(src, effects, scale) {
     }
   }
 
+  if (seen) {
+    const f = letterFade(seen, src, W, H, m, scale);
+    if (f !== 1) {
+      fadeCanvas(out, f);
+      if (main) {
+        // effects with a blend mode go onto the scene one by one, so fading each would let them show through the
+        // see-through letters: cut them out under the letters (as the faded whole would have them) and fade them
+        fadeCanvas(main, f);
+        for (const p of passes) {
+          const x = ctx2d(p.canvas);
+          x.save(); x.globalCompositeOperation = 'destination-out'; x.drawImage(mask, -p.dx, -p.dy); x.restore();
+          fadeCanvas(p.canvas, f);
+        }
+      }
+    }
+  }
+
   // ---- final filters ----
   let result = out, ox = m, oy = m;
   for (const e of final) {
@@ -213,6 +235,41 @@ export function applyEffects(src, effects, scale) {
     }
   }
   return split ? { canvas: result, ox, oy, passes, main } : { canvas: result, ox, oy };
+}
+
+/**
+ * Each pixel's letter opacity: the drawn letters' alpha over the full-opacity letters' alpha, taken from the nearest
+ * letter outside them and softened so the line between two letters at different opacities is not a hard step.
+ * A number when every letter has the same opacity.
+ */
+function letterFade(seen, shape, W, H, m, scale) {
+  const alphaOf = (c) => { const d = ctx2d(copyCanvas(c, W, H, m, m)).getImageData(0, 0, W, H).data; const a = new Float32Array(W * H); for (let i = 0; i < W * H; i++) a[i] = d[i * 4 + 3] / 255; return a; };
+  const a = alphaOf(seen), sh = alphaOf(shape);
+  const seed = new Uint8Array(W * H), ratio = new Float32Array(W * H);
+  let lo = 1, hi = 0;
+  for (let i = 0; i < W * H; i++) {
+    if (sh[i] < 0.5) continue;
+    const r = Math.min(1, a[i] / sh[i]);
+    seed[i] = 1; ratio[i] = r;
+    if (r < lo) lo = r; if (r > hi) hi = r;
+  }
+  if (hi < lo) return 1;
+  if (hi - lo < 1 / 255) return hi;
+  const f = nearestSeedValue(seed, ratio, W, H);
+  boxBlur(f, W, H, Math.max(2, 3 * scale));
+  return f;
+}
+
+/** Multiply a canvas's alpha by f (a number, or one value per pixel). */
+function fadeCanvas(c, f) {
+  const x = ctx2d(c);
+  if (typeof f === 'number') {
+    x.save(); x.globalCompositeOperation = 'destination-in'; x.fillStyle = `rgba(0,0,0,${f})`; x.fillRect(0, 0, c.width, c.height); x.restore();
+    return;
+  }
+  const d = x.getImageData(0, 0, c.width, c.height);
+  for (let i = 0, n = c.width * c.height; i < n; i++) d.data[i * 4 + 3] *= f[i];
+  x.putImageData(d, 0, 0);
 }
 
 function contentLayer(e, { W, H, base, getAlpha, getIn, getBox, scale }) {

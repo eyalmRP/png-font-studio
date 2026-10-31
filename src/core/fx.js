@@ -2,7 +2,7 @@
 
 const INF = 1e20;
 
-function edt1d(f, n, d, v, z) {
+function edt1d(f, n, d, v, z, arg = null) {
   let k = 0;
   v[0] = 0; z[0] = -INF; z[1] = INF;
   for (let q = 1; q < n; q++) {
@@ -14,6 +14,7 @@ function edt1d(f, n, d, v, z) {
   for (let q = 0; q < n; q++) {
     while (z[k + 1] < q) k++;
     d[q] = (q - v[k]) * (q - v[k]) + f[v[k]];
+    if (arg) arg[q] = v[k];
   }
 }
 
@@ -34,6 +35,34 @@ export function edtSquared(seed, W, H) {
     for (let x = 0; x < W; x++) grid[y * W + x] = d[x];
   }
   return grid;
+}
+
+/**
+ * For every pixel, values[] at its nearest seed (the same Euclidean transform, keeping where each minimum came from).
+ * Pixels with no seed anywhere get `empty`.
+ */
+export function nearestSeedValue(seed, values, W, H, empty = 1) {
+  const grid = new Float32Array(W * H), row = new Int32Array(W * H);
+  const n = Math.max(W, H);
+  const f = new Float32Array(n), d = new Float32Array(n), v = new Int32Array(n), z = new Float32Array(n + 1), arg = new Int32Array(n);
+  // columns: distance to, and row of, the nearest seed in the same column
+  for (let x = 0; x < W; x++) {
+    for (let y = 0; y < H; y++) f[y] = seed[y * W + x] ? 0 : INF;
+    edt1d(f, H, d, v, z, arg);
+    for (let y = 0; y < H; y++) { grid[y * W + x] = d[y]; row[y * W + x] = arg[y]; }
+  }
+  // rows: the column whose seed is nearest overall, and so the seed itself
+  const out = new Float32Array(W * H);
+  for (let y = 0; y < H; y++) {
+    for (let x = 0; x < W; x++) f[x] = grid[y * W + x];
+    edt1d(f, W, d, v, z, arg);
+    for (let x = 0; x < W; x++) {
+      if (!(d[x] < INF / 2)) { out[y * W + x] = empty; continue; }
+      const sx = arg[x], sy = row[y * W + sx];
+      out[y * W + x] = values[sy * W + sx];
+    }
+  }
+  return out;
 }
 
 /** Distance (px) from outside pixels to the shape (alpha ≥ 0.5); 0 inside. alpha: Float32Array 0..1 */

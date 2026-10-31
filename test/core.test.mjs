@@ -306,3 +306,20 @@ test('zipDeflate: deflated entries read back the same, and a file that does not 
   assert.deepEqual(files.get('n.bin'), noise);
   assert.equal(textOf(files.get('r.txt')), 'héllo');
 });
+
+test('nearestSeedValue: every pixel takes the value of its nearest seed', async () => {
+  const { nearestSeedValue, edtSquared } = await import('../src/core/fx.js');
+  const W = 23, H = 17, seed = new Uint8Array(W * H), val = new Float32Array(W * H);
+  const pts = [[2, 3, 0.2], [18, 4, 0.9], [10, 14, 0.5], [20, 15, 0.7]];
+  for (const [x, y, v] of pts) { seed[y * W + x] = 1; val[y * W + x] = v; }
+  const out = nearestSeedValue(seed, val, W, H);
+  const d2 = edtSquared(seed, W, H);
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    const best = Math.min(...pts.map(([px, py]) => (px - x) ** 2 + (py - y) ** 2));
+    assert.equal(d2[y * W + x], best);
+    // ties may go either way; otherwise the value is the nearest seed's
+    const near = pts.filter(([px, py]) => (px - x) ** 2 + (py - y) ** 2 === best).map((p) => p[2]);
+    assert.ok(near.some((v) => Math.abs(v - out[y * W + x]) < 1e-6), `pixel ${x},${y}: ${out[y * W + x]} not in ${near}`);
+  }
+  assert.deepEqual([...nearestSeedValue(new Uint8Array(4), new Float32Array(4), 2, 2, 1)], [1, 1, 1, 1]);
+});

@@ -73,10 +73,11 @@ export class Recorder {
 
   // ---------- narration ----------
   /** Start a line of narration (and its caption) now; returns at once, so actions can run while it is spoken. */
-  async say(text) {
+  /** `top`: show the caption at the top, while the part being shown sits at the bottom of the picture. */
+  async say(text, { top = false } = {}) {
     if (this.sayEnd > this.f) await this.hold((this.sayEnd - this.f) / FPS); // never two voices at once
     const { out, dur } = await this.voice.speak(text);
-    this.cues.push({ t: this.t, d: dur, text, wav: out });
+    this.cues.push({ t: this.t, d: dur, text, wav: out, top });
     this.sayEnd = this.f + Math.ceil(dur * FPS);
   }
   /** Wait until the current line has been spoken, plus a short pause. */
@@ -251,7 +252,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
   const lines = cues.map((c, i) => {
     const next = cues[i + 1] ? cues[i + 1].t : dur;
     const end = Math.min(next, c.t + c.d + 0.6);
-    return `Dialogue: 0,${assTime(c.t)},${assTime(end)},Cap,,0,0,0,,${c.text.replace(/\n/g, '\\N')}`;
+    return `Dialogue: 0,${assTime(c.t)},${assTime(end)},Cap,,0,0,0,,${c.top ? '{\\an8}' : ''}${c.text.replace(/\n/g, '\\N')}`;
   });
   return head + lines.join('\n') + '\n';
 }

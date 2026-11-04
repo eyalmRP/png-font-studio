@@ -68,14 +68,18 @@ export function createInspector() {
   };
   syncTabs();
   let refreshers = [];
-  let builtFor = null, builtLayer = null;
+  let builtFor = null, builtLayer = null, builtView = null;
   const reg = (fn) => { refreshers.push(fn); fn(); };
 
   function build() {
+    const layer = selectedLayer();
+    // the same title and tab built again (a preset picked, an effect added, an undo): stay where the person was
+    const view = layer ? layer.id + ':' + state.ui.rightTab : null;
+    const keep = view && view === builtView ? body.scrollTop : 0;
     clear(body);
     refreshers = [];
-    const layer = selectedLayer();
     builtLayer = layer;
+    builtView = view;
     builtFor = layer ? layer.id + ':' + state.ui.rightTab + ':' + (layer.effects?.map((e) => e.id + e.type + (e.fill || '') + (e.mode || '') + (e.kind || '') + e.position).join(',')) + ':' + layer.warp.style : null;
     if (!layer) {
       body.appendChild(h('div.empty', icon('type', 28), h('p', t('Select a title on the stage, or press T and click the artboard to add one.'))));
@@ -88,13 +92,14 @@ export function createInspector() {
     else if (tab === 'warp') buildWarp(layer);
     else if (tab === 'animate') buildAnimate(layer);
     else buildLayer(layer);
+    body.scrollTop = keep; // another title or tab starts at the top
   }
   function refresh() {
     const layer = selectedLayer();
     const key = layer ? layer.id + ':' + state.ui.rightTab + ':' + (layer.effects?.map((e) => e.id + e.type + (e.fill || '') + (e.mode || '') + (e.kind || '') + e.position).join(',')) + ':' + layer.warp.style : null;
     if (key !== builtFor) { build(); return; }
     // undo and redo bring back a copy of the title: the controls must read from the copy, so build them again in place
-    if (layer !== builtLayer) { const y = body.scrollTop; build(); body.scrollTop = y; return; }
+    if (layer !== builtLayer) { build(); return; }
     for (const r of refreshers) r();
   }
 

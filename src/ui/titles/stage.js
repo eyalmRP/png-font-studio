@@ -151,7 +151,8 @@ export function createStage() {
     const hs = layer && handlesOf(layer);
     if (!hs) return null;
     const b = canvas.getBoundingClientRect(), at = ([x, y]) => ({ x: b.left + x, y: b.top + y });
-    return { quad: hs.quad.map(at), handles: Object.fromEntries(hs.list.map((x) => [x.id, at(x.p)])) };
+    const ab = state.project.artboard, vm = viewMatrix(), a0 = vm.transformPoint(new DOMPoint(0, 0)), a1 = vm.transformPoint(new DOMPoint(ab.w, ab.h));
+    return { quad: hs.quad.map(at), handles: Object.fromEntries(hs.list.map((x) => [x.id, at(x.p)])), artboard: { x: b.left + a0.x, y: b.top + a0.y, w: a1.x - a0.x, h: a1.y - a0.y } };
   };
 
   function layerAt(cx, cy) {
@@ -709,6 +710,8 @@ export function createStage() {
     if (mod && (e.key === '=' || e.key === '+')) { e.preventDefault(); zoomBy(1.25); return; }
     if (mod && e.key === '-') { e.preventDefault(); zoomBy(0.8); return; }
     if (mod) return;
+    // typing on a title, then a click in the inspector took the focus: Escape still ends the typing
+    if (e.key === 'Escape' && state.edit) { e.preventDefault(); exitEdit(); return; }
     if (e.key === 't' || e.key === 'T') { setTool('text'); return; }
     if (e.key === 'v' || e.key === 'V') { setTool('select'); return; }
     if (e.key === 'h' || e.key === 'H') { setTool('hand'); return; }

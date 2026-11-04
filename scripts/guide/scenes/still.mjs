@@ -23,7 +23,7 @@ export default async function still(r, page) {
   await r.say('Select letters to style just those. Here, Control Shift and the greater-than key make them bigger.');
   for (let i = 0; i < 6; i++) await r.press('Shift+ArrowLeft', { after: 0.08 });
   await r.hold(0.3);
-  for (let i = 0; i < 3; i++) await r.press('Control+Shift+Period', { show: ['Ctrl', '+', 'Shift', '+', '>'], after: 0.25 });
+  for (let i = 0; i < 2; i++) await r.press('Control+Shift+Period', { show: ['Ctrl', '+', 'Shift', '+', '>'], after: 0.25 });
   await r.keys(null);
   await r.done(0.2);
   await r.say('Or recolour them in the Colour section of the inspector.');
@@ -41,15 +41,15 @@ export default async function still(r, page) {
   r.chapter('Move, scale and rotate');
   await r.say('Drag a title to move it anywhere on the artboard.');
   let p = await handle(page, 'body');
-  await r.drag(pt(p), { x: p.x + 60, y: p.y - 70 }, { dur: 1.1 });
+  await r.drag(pt(p), { x: p.x - 10, y: p.y - 40 }, { dur: 1.1 });
   await r.done();
   await r.say('Drag a corner handle to scale it.');
   p = await handle(page, 'se');
-  await r.drag(pt(p), { x: p.x + 50, y: p.y + 14 }, { dur: 0.9 });
+  await r.drag(pt(p), { x: p.x - 70, y: p.y - 14 }, { dur: 0.9 });
   await r.done();
   await r.say('Drag the round handle above it to rotate. Hold Shift to snap to fifteen degrees.');
   p = await handle(page, 'rot');
-  await r.drag(pt(p), { x: p.x + 70, y: p.y + 8 }, { dur: 1.0 });
+  await r.drag(pt(p), { x: p.x + 45, y: p.y + 6 }, { dur: 1.0 });
   await r.done(0.2);
   await r.say('Control Z undoes the last change.');
   await r.press('Control+z', { show: ['Ctrl', '+', 'Z'], after: 0.6 });
@@ -63,6 +63,7 @@ export default async function still(r, page) {
   r.chapter('Effects and styles');
   await r.say('The Effects tab adds strokes, shadows, glows, bevels and 3D. Start from a ready-made style.');
   await r.click(SEL.tab('Effects'), { dur: 0.8, after: 0.3 });
+  await r.scrollTo(SEL.section('Styles'), { dur: 0.6 });
   await r.spot(SEL.section('Styles'));
   await r.click('.style-chip:has-text("Candy")', { dur: 0.7, after: 0.9 });
   await r.click('.style-chip:has-text("Neon")', { dur: 0.6, after: 0.9 });
@@ -84,12 +85,21 @@ export default async function still(r, page) {
 
   r.chapter('Add a title');
   await r.say('To add another title, press T, click the artboard, and type.');
-  const q = await page.evaluate(() => { const c = document.querySelector('canvas.view').getBoundingClientRect(); return { x: c.left + c.width * 0.5, y: c.top + c.height * 0.83 }; });
+  // click empty stage first, so the new title starts plain (it takes the look of a selected title), then add it under the others
+  const g = await page.evaluate(() => {
+    const s = window.__pfs.state, g = window.__pfs.stageGeom(s.project.layers.find((l) => l.doc.chars.join('').includes('PNG')).id), ab = g.artboard;
+    const c = document.querySelector('canvas.view').getBoundingClientRect();
+    // the new title's box starts at the click: clear of the title above, inside the artboard
+    const y = Math.min(Math.max(...g.quad.map((p) => p.y)) + 14, ab.y + ab.h - 62);
+    return { off: { x: c.left + 40, y: c.bottom - 40 }, at: { x: ab.x + ab.w / 2 - 55, y } };
+  });
+  await r.click(pt(g.off), { dur: 0.7, after: 0.2 });
   await r.press('t', { show: ['T'], after: 0.3 });
   await r.keys(null);
-  await r.click(pt(q), { dur: 0.8, after: 0.3 });
-  await r.type('Your text', { cps: 9 });
+  await r.click(pt(g.at), { dur: 0.8, after: 0.3 });
+  await r.type('Wow!', { cps: 6 });
   await r.press('Escape', { after: 0.4 });
+  if (process.env.PFS_GUIDE_DRAFT) console.log('new title', JSON.stringify(await page.evaluate(() => window.__pfs.state.project.layers.map((l) => [l.doc.chars.join(''), window.__pfs.stageGeom(l.id).quad.map((p) => [Math.round(p.x), Math.round(p.y)])]))));
   await r.done();
 
   r.chapter('Layers and saving');

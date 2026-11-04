@@ -69,11 +69,13 @@ export default async function exporter(r) {
   await r.spot(null);
 
   r.chapter('After Effects');
-  await r.say('After Effects gives you a ZIP with a script. Run it, and it builds an editable composition, with each letter on its own layer.');
+  await r.say('After Effects gives you a ZIP with a script. Run it, and it builds an editable composition, with each letter on its own layer.', { top: true });
   await r.click(card('After Effects composition'), { dur: 0.8, after: 0.4 });
   await r.spot('.modal-body .hint:has-text("After Effects")', { pad: 10 });
+  await r.camera('.modal-body .hint:has-text("After Effects")', { pad: 140, maxZoom: 1.6 });
   await r.done();
   await r.spot(null);
+  await r.camera(null);
 
   r.chapter('Export');
   await r.say('Press Export, and the file downloads.');
@@ -81,8 +83,15 @@ export default async function exporter(r) {
   await r.spot('.modal-foot .btn-primary', { pad: 8 });
   await r.click('.modal-foot .btn-primary', { dur: 0.7, after: 0.3 });
   await r.spot(null);
-  await r.until(() => !document.querySelector('.modal-back'), null, 30).catch(() => {});
-  await r.done(0.8);
+  await r.until(() => /Saved/.test(document.querySelector('.modal-body')?.textContent || ''), null, 30);
+  await r.done(0.3);
+  await r.say('The window stays open, so you can export another format. Close it when you’re done.');
+  await r.ring('.modal-body p.hint:has-text("Saved")', { pad: 8 });
+  await r.hold(1.2);
+  await r.ring('.modal-foot button:has-text("Close")', { pad: 6 });
+  await r.click('.modal-foot button:has-text("Close")', { dur: 0.7, after: 0.3 });
+  await r.spot(null);
+  await r.done(0.4);
 
   r.chapter('Still titles');
   await r.say('A Still title exports as an image. Switch to Animated whenever you want video.');

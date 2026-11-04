@@ -1,0 +1,137 @@
+{
+ "name": "fonts",
+ "title": "Make a font",
+ "duration": 118.4,
+ "chapters": [
+  {
+   "t": 6.1,
+   "title": "The Fonts workspace"
+  },
+  {
+   "t": 16.8,
+   "title": "Import a glyph sheet"
+  },
+  {
+   "t": 47.3,
+   "title": "Edit a glyph"
+  },
+  {
+   "t": 63.3,
+   "title": "Guides"
+  },
+  {
+   "t": 72.5,
+   "title": "Auto-place and even sizes"
+  },
+  {
+   "t": 83.9,
+   "title": "Try it out"
+  },
+  {
+   "t": 87.6,
+   "title": "Colour variants"
+  },
+  {
+   "t": 102.1,
+   "title": "Save and Photoshop"
+  }
+ ],
+ "transcript": [
+  {
+   "t": 0.4,
+   "text": "In this video, you’ll turn a sheet of letters into a font, then fine-tune it and make a colour version."
+  },
+  {
+   "t": 6.1,
+   "text": "Open Fonts. The interface turns violet here, so you always know you’re working on letters."
+  },
+  {
+   "t": 11.8,
+   "text": "Your fonts are listed on the left. Bubble Blue, Orange and Pearl come with the app."
+  },
+  {
+   "t": 16.8,
+   "text": "Start with a sheet of letters in a grid, drawn by an AI image tool. This guide has prompts you can copy."
+  },
+  {
+   "t": 23.7,
+   "text": "Choose the sheet, or drop it straight onto this window."
+  },
+  {
+   "t": 27,
+   "text": "The app finds the grid, and removes the background around every letter."
+  },
+  {
+   "t": 31.2,
+   "text": "It recognises which sheet this is, and names every cell in reading order: A, B, C, and so on."
+  },
+  {
+   "t": 37.6,
+   "text": "Check the letters under the sheet. If a cell is wrong, type the right character into it."
+  },
+  {
+   "t": 43.4,
+   "text": "Import into a new font, give it a name, and press Import."
+  },
+  {
+   "t": 47.3,
+   "text": "Here’s your new font. Click any glyph to edit it."
+  },
+  {
+   "t": 50.3,
+   "text": "Drag the letter to move it up or down, or drag the dotted line to change its spacing."
+  },
+  {
+   "t": 55.4,
+   "text": "The exact numbers are right below: baseline, scale, and the space on each side."
+  },
+  {
+   "t": 60.5,
+   "text": "Every change can be undone with Control Z."
+  },
+  {
+   "t": 63.3,
+   "text": "Guides show the baseline, cap height, x-height, ascender and descender on every glyph. Turn on the ones you need."
+  },
+  {
+   "t": 73.3,
+   "text": "Auto-place all sets every letter on the baseline for you, with the slight overshoot round letters need."
+  },
+  {
+   "t": 79.4,
+   "text": "Even out sizes fixes sheets where each letter was stretched to fill its cell."
+  },
+  {
+   "t": 83.9,
+   "text": "Type in the sample line to try your font on any words."
+  },
+  {
+   "t": 87.6,
+   "text": "Colour variants recolour the whole font from its own artwork. No new sheets needed."
+  },
+  {
+   "t": 92.6,
+   "text": "Pick a preset, or fine-tune the colours, then create the variant."
+  },
+  {
+   "t": 96.6,
+   "text": "Give it a name, and press OK."
+  },
+  {
+   "t": 98.7,
+   "text": "It appears in your list, ready to use in a title."
+  },
+  {
+   "t": 102.9,
+   "text": "Save font file keeps a copy you can share, or open on another computer."
+  },
+  {
+   "t": 107.5,
+   "text": "Export PSD sends every letter to Photoshop as its own layer. Update from PSD brings your edits back."
+  },
+  {
+   "t": 114.9,
+   "text": "Next, let’s design a title with your font."
+  }
+ ]
+}

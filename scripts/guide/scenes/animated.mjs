@@ -67,15 +67,18 @@ export default async function animated(r) {
   await r.spot(null);
 
   r.chapter('The player');
-  await r.say('The player plays the whole title. Press play, or drag the bar to scrub through it.');
+  // the player sits at the bottom of the picture here: captions go to the top
+  await r.say('The player plays the whole title. Press play, or drag the bar to scrub through it.', { top: true });
   await r.spot('.player');
   await r.camera('.player', { pad: 60, maxZoom: 1.8 });
   await r.click('.player button[aria-label^="Play"]', { dur: 0.7, after: 2.6 });
   await r.click('.player button[aria-label^="Pause"], .player button[aria-label^="Play"]', { dur: 0.3, after: 0.2 });
-  await r.drag('.player-scrub', (m) => ({ x: m.x - 120, y: m.y }), { dur: 1.0 });
-  await r.drag('.player-scrub', (m) => ({ x: m.x + 160, y: m.y }), { dur: 1.2 });
+  // scrub back to the start of the entrance, then forward into the hold, where the title is on screen
+  const bar = await r.rect('.player-scrub');
+  await r.drag('.player-scrub', { x: bar.x + bar.w * 0.12, y: bar.y + bar.h / 2 }, { dur: 1.0 });
+  await r.drag({ x: bar.x + bar.w * 0.12 - 1, y: bar.y + bar.h / 2 - 1, w: 2, h: 2 }, { x: bar.x + bar.w * 0.5, y: bar.y + bar.h / 2 }, { dur: 1.2 });
   await r.done();
-  await r.say('Hold sets how long the title stays on screen. Loop repeats it while you work.');
+  await r.say('Hold sets how long the title stays on screen. Loop repeats it while you work.', { top: true });
   await r.ring('.player-hold');
   await r.click('input.nf-input[aria-label="Hold"]', { dur: 0.7, after: 0.1 });
   await r.press('Control+a', { after: 0.1 });
@@ -84,7 +87,7 @@ export default async function animated(r) {
   await r.ring('.player .toggle');
   await r.move('.player .switch', { dur: 0.6 });
   await r.done();
-  await r.say('Press K to play or pause at any time.');
+  await r.say('Press K to play or pause at any time.', { top: true });
   await r.spot(null);
   await r.camera(null);
   await r.page.evaluate(() => document.activeElement && document.activeElement.blur());

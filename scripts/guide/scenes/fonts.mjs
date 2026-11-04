@@ -124,6 +124,14 @@ export default async function fonts(r, page) {
   await r.scrollTo('button:has-text("Create variant")', { dur: 0.6, offset: 300 });
   await r.click('button:has-text("Create variant")', { dur: 0.7, after: 0.2 });
   await r.spot(null);
+  // the variant is named first (the name of its font and colour is filled in)
+  await r.until(() => !!document.querySelector('.modal input.text-input'), null, 5);
+  await r.done(0.1);
+  await r.say('Give it a name, and press OK.');
+  await r.spot('.modal', { pad: 6 });
+  await r.hold(0.8);
+  await r.click('.modal-foot .btn-primary', { dur: 0.8, after: 0.2 });
+  await r.spot(null);
   await r.until(() => document.querySelectorAll('.font-item').length >= 5, null, 60);
   await r.done(0.3);
   await r.say('It appears in your list, ready to use in a title.');

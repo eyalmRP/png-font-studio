@@ -1,7 +1,8 @@
 // Export: formats, size and options, MP4 with a luma matte, After Effects, exporting, and Still mode's formats.
 import { SEL, intro } from './common.mjs';
 
-const card = (name) => `.export-card:has-text("${name}")`;
+// by the card's title: descriptions mention other formats (PNG sequence names After Effects)
+const card = (name) => `.export-card:has(b:text-is("${name}"))`;
 
 export default async function exporter(r) {
   await intro(r, 'Export', 'Get your title out of the app', 'In this video, you’ll export your title as an image, a video, or an After Effects composition.');
@@ -69,8 +70,8 @@ export default async function exporter(r) {
 
   r.chapter('After Effects');
   await r.say('After Effects gives you a ZIP with a script. Run it, and it builds an editable composition, with each letter on its own layer.');
-  await r.click(card('After Effects'), { dur: 0.8, after: 0.4 });
-  await r.spot('.modal-body .hint >> nth=-1', { pad: 10 });
+  await r.click(card('After Effects composition'), { dur: 0.8, after: 0.4 });
+  await r.spot('.modal-body .hint:has-text("After Effects")', { pad: 10 });
   await r.done();
   await r.spot(null);
 

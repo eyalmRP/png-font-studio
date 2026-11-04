@@ -30,6 +30,7 @@ const url = `http://127.0.0.1:${server.address().port}/png-font-studio/`;
 const wanted = process.argv.slice(2).length ? process.argv.slice(2) : SCENES;
 const voice = new Voice({ python: process.env.PFS_GUIDE_PYTHON || 'python3', cacheDir: path.join(root, 'dist/guide-work/voice') });
 const browser = await chromium.launch();
+const failed = [];
 try {
   for (const name of wanted) {
     const scene = (await import(path.join(here, 'scenes', `${name}.mjs`))).default;
@@ -52,9 +53,16 @@ try {
     const rec = new Recorder(page, cdp, voice, { name, title: scene.title, outDir: path.join(root, 'guide/media'), workDir: path.join(root, 'dist/guide-work') });
     rec.mouse = { x: VIEW.w * 0.62, y: VIEW.h * 0.55 };
     const t0 = Date.now();
-    await scene(rec, page);
-    const out = await rec.finish({ poster: scene.poster });
-    console.log(`${name}: ${out.dur.toFixed(1)} s video, ${(out.size / 1e6).toFixed(1)} MB, recorded in ${Math.round((Date.now() - t0) / 1000)} s`);
+    try {
+      await scene(rec, page);
+      const out = await rec.finish({ poster: scene.poster });
+      console.log(`${name}: ${out.dur.toFixed(1)} s video, ${(out.size / 1e6).toFixed(1)} MB, recorded in ${Math.round((Date.now() - t0) / 1000)} s`);
+    } catch (e) {
+      // one scene failing should not cost the others
+      console.error(`${name}: FAILED at ${rec.t.toFixed(1)} s: ${e.message}`);
+      failed.push(name);
+      await rec.abort();
+    }
     await context.close();
   }
 } finally {
@@ -62,3 +70,4 @@ try {
   await browser.close();
   server.close();
 }
+if (failed.length) { console.error('failed:', failed.join(' ')); process.exitCode = 1; }

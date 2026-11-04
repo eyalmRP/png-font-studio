@@ -42,7 +42,10 @@ export class Recorder {
     this.cam = { from: full(), to: full(), f0: 0, f1: 0 };
     this.mouse = { x: VIEW.w / 2, y: VIEW.h / 2 };
     fs.mkdirSync(workDir, { recursive: true });
+    // PFS_GUIDE_DRAFT=1: run the scene without capturing frames, to check its steps quickly
+    this.draft = !!process.env.PFS_GUIDE_DRAFT;
     this.raw = path.join(workDir, `${name}.raw.mp4`);
+    if (this.draft) return;
     this.enc = spawn('ffmpeg', ['-loglevel', 'error', '-y', '-f', 'image2pipe', '-framerate', String(FPS), '-c:v', 'mjpeg', '-i', '-',
       '-vf', `scale=${OUT.w}:${OUT.h}:flags=lanczos,format=yuv420p`, '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '12', this.raw], { stdio: ['pipe', 'inherit', 'inherit'] });
     this.encDone = new Promise((res, rej) => this.enc.on('exit', (c) => (c ? rej(new Error('ffmpeg exited ' + c)) : res())));
@@ -54,6 +57,7 @@ export class Recorder {
   async frame() {
     const ms = Math.round((this.f + 1) * 1000 / FPS) - Math.round(this.f * 1000 / FPS);
     await this.page.clock.runFor(ms);
+    if (this.draft) { this.f++; return; }
     const c = this.cameraAt(this.f);
     const shot = await this.cdp.send('Page.captureScreenshot', { format: 'jpeg', quality: 93, clip: { x: c.x, y: c.y, width: c.w, height: c.h, scale: OUT.w / c.w } });
     const buf = Buffer.from(shot.data, 'base64');
@@ -193,8 +197,12 @@ export class Recorder {
   }
 
   // ---------- output ----------
+  /** Stop without output (a scene that failed). */
+  async abort() { if (this.enc) { this.enc.stdin.end(); await this.encDone.catch(() => {}); } }
+
   async finish({ poster = 3.4 } = {}) {
     const dur = this.t;
+    if (this.draft) return { mp4: null, dur, size: 0 };
     this.enc.stdin.end();
     await this.encDone;
     const work = this.workDir;

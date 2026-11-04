@@ -1,0 +1,93 @@
+{
+ "name": "export",
+ "title": "Export",
+ "duration": 81.4,
+ "chapters": [
+  {
+   "t": 6.4,
+   "title": "Open Export"
+  },
+  {
+   "t": 9,
+   "title": "Formats"
+  },
+  {
+   "t": 29.3,
+   "title": "Size and options"
+  },
+  {
+   "t": 42.4,
+   "title": "MP4 and transparency"
+  },
+  {
+   "t": 54.6,
+   "title": "After Effects"
+  },
+  {
+   "t": 63,
+   "title": "Export"
+  },
+  {
+   "t": 70.4,
+   "title": "Still titles"
+  }
+ ],
+ "transcript": [
+  {
+   "t": 0.4,
+   "text": "In this video, you’ll export your title as an image, a video, or an After Effects composition."
+  },
+  {
+   "t": 6.4,
+   "text": "When your title is ready, press Export."
+  },
+  {
+   "t": 9,
+   "text": "Pick a format. PNG image is the current frame, with transparency. PNG sequence is every frame, for any video editor."
+  },
+  {
+   "t": 17.6,
+   "text": "WebM and MOV are videos that keep transparency. MP4 plays everywhere."
+  },
+  {
+   "t": 23,
+   "text": "GIF is for chat stickers. Animated PNG and WebP give soft edges in small files."
+  },
+  {
+   "t": 30.4,
+   "text": "Choose the size: one times is the artboard size, two times is twice as sharp."
+  },
+  {
+   "t": 35.8,
+   "text": "Trim crops away empty space. You can add the background colour, or export only the selected title."
+  },
+  {
+   "t": 42.4,
+   "text": "MP4 can’t store transparency. For a transparent title, you get a ZIP with the video and a black and white matte."
+  },
+  {
+   "t": 49.9,
+   "text": "In your video editor, put the matte above the video and use it as a luma matte."
+  },
+  {
+   "t": 54.6,
+   "text": "After Effects gives you a ZIP with a script. Run it, and it builds an editable composition, with each letter on its own layer."
+  },
+  {
+   "t": 63,
+   "text": "Press Export, and the file downloads."
+  },
+  {
+   "t": 65.5,
+   "text": "The window stays open, so you can export another format. Close it when you’re done."
+  },
+  {
+   "t": 70.4,
+   "text": "A Still title exports as an image. Switch to Animated whenever you want video."
+  },
+  {
+   "t": 77.5,
+   "text": "That’s everything. Have fun making titles!"
+  }
+ ]
+}

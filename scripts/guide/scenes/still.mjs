@@ -41,7 +41,7 @@ export default async function still(r, page) {
   r.chapter('Move, scale and rotate');
   await r.say('Drag a title to move it anywhere on the artboard.');
   let p = await handle(page, 'body');
-  await r.drag(pt(p), { x: p.x - 10, y: p.y - 40 }, { dur: 1.1 });
+  await r.drag(pt(p), { x: p.x + 20, y: p.y - 75 }, { dur: 1.1 });
   await r.done();
   await r.say('Drag a corner handle to scale it.');
   p = await handle(page, 'se');
@@ -85,13 +85,13 @@ export default async function still(r, page) {
 
   r.chapter('Add a title');
   await r.say('To add another title, press T, click the artboard, and type.');
-  // click empty stage first, so the new title starts plain (it takes the look of a selected title), then add it under the others
+  // click empty stage first, so the new title starts plain (it takes the look of a selected title), then add it between the others
   const g = await page.evaluate(() => {
-    const s = window.__pfs.state, g = window.__pfs.stageGeom(s.project.layers.find((l) => l.doc.chars.join('').includes('PNG')).id), ab = g.artboard;
+    const s = window.__pfs.state, geom = (txt) => window.__pfs.stageGeom(s.project.layers.find((l) => l.doc.chars.join('').includes(txt)).id);
+    const png = geom('PNG'), ab = png.artboard, above = Math.max(...geom('Hi').quad.map((p) => p.y)), below = Math.min(...png.quad.map((p) => p.y));
     const c = document.querySelector('canvas.view').getBoundingClientRect();
-    // the new title's box starts at the click: clear of the title above, inside the artboard
-    const y = Math.min(Math.max(...g.quad.map((p) => p.y)) + 14, ab.y + ab.h - 62);
-    return { off: { x: c.left + 40, y: c.bottom - 40 }, at: { x: ab.x + ab.w / 2 - 55, y } };
+    // the new title's box starts at the click (about 64 px tall, 140 wide here): centre it in the gap
+    return { off: { x: c.left + 40, y: c.bottom - 40 }, at: { x: ab.x + ab.w / 2 - 70, y: (above + below) / 2 - 32 } };
   });
   await r.click(pt(g.off), { dur: 0.7, after: 0.2 });
   await r.press('t', { show: ['T'], after: 0.3 });
@@ -99,7 +99,6 @@ export default async function still(r, page) {
   await r.click(pt(g.at), { dur: 0.8, after: 0.3 });
   await r.type('Wow!', { cps: 6 });
   await r.press('Escape', { after: 0.4 });
-  if (process.env.PFS_GUIDE_DRAFT) console.log('new title', JSON.stringify(await page.evaluate(() => window.__pfs.state.project.layers.map((l) => [l.doc.chars.join(''), window.__pfs.stageGeom(l.id).quad.map((p) => [Math.round(p.x), Math.round(p.y)])]))));
   await r.done();
 
   r.chapter('Layers and saving');

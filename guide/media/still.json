@@ -1,0 +1,109 @@
+{
+ "name": "still",
+ "title": "Still titles",
+ "duration": 83.7,
+ "chapters": [
+  {
+   "t": 5.4,
+   "title": "Switch to Still"
+  },
+  {
+   "t": 11.5,
+   "title": "Type on the title"
+  },
+  {
+   "t": 27.6,
+   "title": "Move, scale and rotate"
+  },
+  {
+   "t": 46,
+   "title": "Effects and styles"
+  },
+  {
+   "t": 57.7,
+   "title": "Warp"
+  },
+  {
+   "t": 63.5,
+   "title": "Add a title"
+  },
+  {
+   "t": 67.4,
+   "title": "Layers and saving"
+  }
+ ],
+ "transcript": [
+  {
+   "t": 0.4,
+   "text": "In this video, you’ll design a still title: type on it, move it around, and style it."
+  },
+  {
+   "t": 5.4,
+   "text": "Switch to Still. The interface turns pink, and the player goes away: this title is an image."
+  },
+  {
+   "t": 11.5,
+   "text": "Double-click a title to type on it directly. Everything updates live."
+  },
+  {
+   "t": 16,
+   "text": "Select letters to style just those. Here, Control Shift and the greater-than key make them bigger."
+  },
+  {
+   "t": 22,
+   "text": "Or recolour them in the Colour section of the inspector."
+  },
+  {
+   "t": 25.5,
+   "text": "Press Escape when you’re done typing."
+  },
+  {
+   "t": 27.6,
+   "text": "Drag a title to move it anywhere on the artboard."
+  },
+  {
+   "t": 30.6,
+   "text": "Drag a corner handle to scale it."
+  },
+  {
+   "t": 32.8,
+   "text": "Drag the round handle above it to rotate. Hold Shift to snap to fifteen degrees."
+  },
+  {
+   "t": 37.9,
+   "text": "Control Z undoes the last change."
+  },
+  {
+   "t": 40.5,
+   "text": "With the title selected, the arrow keys nudge it one pixel at a time, or ten with Shift."
+  },
+  {
+   "t": 46,
+   "text": "The Effects tab adds strokes, shadows, glows, bevels and 3D. Start from a ready-made style."
+  },
+  {
+   "t": 52.3,
+   "text": "Then fine-tune each effect in the list below. The top of the list is drawn on top."
+  },
+  {
+   "t": 57.7,
+   "text": "Warp bends the whole title, like Photoshop’s Warp Text, or sets the letters along a curve."
+  },
+  {
+   "t": 63.5,
+   "text": "To add another title, press T, click the artboard, and type."
+  },
+  {
+   "t": 67.4,
+   "text": "Every title is a layer. Show or hide it, lock it, or drag to reorder."
+  },
+  {
+   "t": 72,
+   "text": "Your work is saved in this browser by itself. Save title makes a file to back it up, or open on another computer, with its fonts inside."
+  },
+  {
+   "t": 80.9,
+   "text": "Next, let’s animate a title."
+  }
+ ]
+}

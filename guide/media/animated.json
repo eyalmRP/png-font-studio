@@ -1,0 +1,81 @@
+{
+ "name": "animated",
+ "title": "Animated titles",
+ "duration": 76.4,
+ "chapters": [
+  {
+   "t": 6.1,
+   "title": "Animated mode"
+  },
+  {
+   "t": 13.8,
+   "title": "How it plays"
+  },
+  {
+   "t": 23.7,
+   "title": "Transition in"
+  },
+  {
+   "t": 44.3,
+   "title": "While on screen"
+  },
+  {
+   "t": 51.8,
+   "title": "Transition out"
+  },
+  {
+   "t": 57.5,
+   "title": "The player"
+  }
+ ],
+ "transcript": [
+  {
+   "t": 0.4,
+   "text": "In this video, you’ll animate a title: how it arrives, what it does on screen, and how it leaves."
+  },
+  {
+   "t": 6.1,
+   "text": "In Animated, the interface is blue, and the player sits under the stage."
+  },
+  {
+   "t": 10.7,
+   "text": "Select a title, and open the Animate tab."
+  },
+  {
+   "t": 13.8,
+   "text": "Every title plays in three parts: it animates in, stays on screen, then animates out. Preview plays just this title."
+  },
+  {
+   "t": 24.4,
+   "text": "Transition in is how the title arrives. Presets are grouped: cute, cartoony, professional and fun."
+  },
+  {
+   "t": 37.7,
+   "text": "Set its duration, the stagger between letters, and whether it moves by letter, word, line, or all at once."
+  },
+  {
+   "t": 45.1,
+   "text": "While on screen, a gentle loop keeps the title alive between its entrance and its exit."
+  },
+  {
+   "t": 52.6,
+   "text": "Transition out is how it leaves the screen."
+  },
+  {
+   "t": 57.5,
+   "text": "The player plays the whole title. Press play, or drag the bar to scrub through it."
+  },
+  {
+   "t": 65.6,
+   "text": "Hold sets how long the title stays on screen. Loop repeats it while you work."
+  },
+  {
+   "t": 70.4,
+   "text": "Press K to play or pause at any time."
+  },
+  {
+   "t": 73.9,
+   "text": "Next, let’s export it."
+  }
+ ]
+}

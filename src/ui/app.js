@@ -9,6 +9,7 @@ import { state, on, setUI, undo, redo, canUndo, canRedo, emit } from '../app/sto
 import { mountTitles } from './titles/titles.js';
 import { mountFonts } from './fonts/fonts.js';
 import { drawSample } from './sample.js';
+import { inArtifact } from '../storage/files.js';
 
 let root, current = null, sheet = null;
 
@@ -62,6 +63,7 @@ export function render() {
     ['en', 'he'].map((l) => h('button.pill', { type: 'button', class: getLang() === l ? 'on' : '', on: { click: () => { setLang(l); render(); } } }, l === 'en' ? 'EN' : 'עב')));
   const helpBtn = iconButton('help', t('Help'), (e) => menu(e.currentTarget, [
     { label: t('Getting started'), icon: 'sparkles', onClick: () => startTour() },
+    { label: t('User guide'), icon: 'book', hint: '↗', onClick: openGuide },
     { label: t('Keyboard shortcuts'), icon: 'keyboard', hint: '?', onClick: () => showShortcuts() },
     // the language pills give way on phones, so the switch is here too
     { label: getLang() === 'he' ? 'English' : 'עברית', icon: 'languages', onClick: () => { setLang(getLang() === 'he' ? 'en' : 'he'); render(); } },
@@ -99,6 +101,13 @@ export function render() {
   current = state.ui.mode === 'fonts' ? mountFonts(ctx) : mountTitles(ctx);
   updateHistory();
   requestAnimationFrame(drawBrand);
+}
+
+// the guide lives beside the app on the website; inside claude.ai the page has no address of its own to go from
+const GUIDE_URL = 'https://eyalmrp.github.io/png-font-studio/guide/';
+function openGuide() {
+  const url = inArtifact() || location.protocol === 'file:' ? GUIDE_URL : new URL('guide/', location.href).href;
+  window.open(url, '_blank', 'noopener');
 }
 
 function isDark() {

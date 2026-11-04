@@ -714,4 +714,5 @@ export const HE = {
   'Resize the panel': 'שינוי גובה הלוח',
   'Letter opacity': 'אטימות האותיות',
   'Fades the selected letters, or the whole title, together with their stroke and shadow. The Layer tab’s opacity fades the whole layer.': 'מעמעם את האותיות שנבחרו, או את כל הכותרת, יחד עם קו המתאר והצל שלהן. האטימות בלשונית השכבה מעמעמת את כל השכבה.',
+  'User guide': 'מדריך למשתמש',
 };

@@ -1,0 +1,609 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>PNG Font Studio · Guide</title>
+<meta name="description" content="How to use PNG Font Studio: make fonts from AI glyph sheets, design still and animated titles, and export them. With step-by-step videos.">
+<meta property="og:title" content="PNG Font Studio · Guide">
+<meta property="og:description" content="Make fonts from AI glyph sheets, design still and animated titles, and export them. Step-by-step videos.">
+<meta property="og:image" content="media/ui.jpg">
+<link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2064%2064%22%3E%3Cdefs%3E%3ClinearGradient%20id%3D%22g%22%20x1%3D%220%22%20x2%3D%221%22%3E%3Cstop%20offset%3D%220%22%20stop-color%3D%22%23ff4fa3%22%2F%3E%3Cstop%20offset%3D%221%22%20stop-color%3D%22%233ad0ff%22%2F%3E%3C%2FlinearGradient%3E%3C%2Fdefs%3E%3Crect%20width%3D%2264%22%20height%3D%2264%22%20rx%3D%2214%22%20fill%3D%22%231a1823%22%2F%3E%3Ctext%20x%3D%2232%22%20y%3D%2245%22%20font-family%3D%22Arial%20Black%2CArial%2Csans-serif%22%20font-weight%3D%22900%22%20font-size%3D%2234%22%20text-anchor%3D%22middle%22%20fill%3D%22url(%23g)%22%3EAa%3C%2Ftext%3E%3C%2Fsvg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;600;700;800&display=swap">
+<style>
+:root {
+  --bg: #f6f4fa; --bg-2: #efecf6; --card: #ffffff; --line: #e2deeb; --line-2: #cfc9dc; --fg: #1b1724; --fg-2: #423d52; --muted: #5f5a72;
+  --pink: #d81b78; --blue: #1a62d6; --violet: #6b3fe0; --cyan: #0b8fb8; --ok: #1c8a55;
+  --grad: linear-gradient(90deg, #ff4fa3, #3ad0ff);
+  --shadow: 0 10px 30px rgba(30, 20, 60, .10); --r: 16px;
+  --kbd: #f1eef7;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f0c16; --bg-2: #15111e; --card: #1a1623; --line: #2c2639; --line-2: #3d3650; --fg: #eeeaf6; --fg-2: #cdc7dc; --muted: #a7a1b9;
+    --pink: #ff4fa3; --blue: #4aa3ff; --violet: #a68bff; --cyan: #3ad0ff; --ok: #3ccf8e; --shadow: 0 12px 34px rgba(0, 0, 0, .45); --kbd: #262033;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0f0c16; --bg-2: #15111e; --card: #1a1623; --line: #2c2639; --line-2: #3d3650; --fg: #eeeaf6; --fg-2: #cdc7dc; --muted: #a7a1b9;
+  --pink: #ff4fa3; --blue: #4aa3ff; --violet: #a68bff; --cyan: #3ad0ff; --ok: #3ccf8e; --shadow: 0 12px 34px rgba(0, 0, 0, .45); --kbd: #262033;
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; scroll-padding-top: 76px; }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+body { margin: 0; background: var(--bg); color: var(--fg); font: 16px/1.6 Rubik, system-ui, -apple-system, 'Segoe UI', sans-serif; -webkit-font-smoothing: antialiased; }
+a { color: var(--blue); }
+h1, h2, h3 { line-height: 1.15; margin: 0; }
+p { margin: 0 0 12px; }
+.wrap { width: min(1120px, 100% - 32px); margin-inline: auto; }
+.grad { background: var(--grad); -webkit-background-clip: text; background-clip: text; color: transparent; }
+:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; border-radius: 6px; }
+
+/* top bar */
+.top { position: sticky; top: 0; z-index: 20; background: color-mix(in srgb, var(--bg) 86%, transparent); backdrop-filter: blur(12px); border-bottom: 1px solid var(--line); }
+.top .wrap { display: flex; align-items: center; gap: 14px; height: 60px; }
+.logo { font-weight: 800; font-size: 19px; text-decoration: none; white-space: nowrap; }
+.logo small { -webkit-text-fill-color: var(--muted); color: var(--muted); font-weight: 600; font-size: 14px; margin-inline-start: 6px; }
+.nav { display: flex; gap: 2px; margin-inline-start: auto; overflow-x: auto; scrollbar-width: none; }
+.nav a { color: var(--fg-2); text-decoration: none; font-weight: 500; font-size: 14px; padding: 7px 11px; border-radius: 999px; white-space: nowrap; }
+.nav a:hover { background: var(--bg-2); color: var(--fg); }
+.nav a.on { background: var(--card); color: var(--fg); box-shadow: 0 1px 4px rgba(0,0,0,.12); }
+.btn { display: inline-flex; align-items: center; gap: 8px; border: 1px solid var(--line-2); background: var(--card); color: var(--fg); font: 600 15px Rubik, sans-serif; padding: 10px 16px; border-radius: 12px; text-decoration: none; cursor: pointer; white-space: nowrap; }
+.btn:hover { border-color: var(--fg-2); }
+.btn.primary { background: var(--grad); color: #160b1c; border: 0; }
+.btn.primary:hover { filter: brightness(1.06); }
+.icon-btn { width: 40px; height: 40px; padding: 0; justify-content: center; border-radius: 12px; }
+.btn svg { width: 18px; height: 18px; }
+@media (max-width: 860px) { .nav { display: none; } .top .open-app span { display: none; } .top .open-app { padding: 10px 12px; } .top .wrap > .spacer { flex: 1; } }
+
+/* hero */
+.hero { padding: 64px 0 36px; }
+.hero .split { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr); gap: 44px; align-items: center; }
+.eyebrow { font-weight: 600; font-size: 13px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); margin-bottom: 12px; }
+.hero h1 { font-size: clamp(34px, 5vw, 54px); font-weight: 800; letter-spacing: -.01em; }
+.hero p.lead { font-size: 19px; color: var(--fg-2); margin: 18px 0 26px; max-width: 34em; }
+.hero .ctas { display: flex; gap: 12px; flex-wrap: wrap; }
+.hero-shot { position: relative; border-radius: 18px; overflow: hidden; box-shadow: var(--shadow); border: 1px solid var(--line); display: block; aspect-ratio: 16 / 10; background: #120f1a; }
+.hero-shot img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.play { position: absolute; inset: 0; display: grid; place-items: center; background: linear-gradient(transparent 55%, rgba(0,0,0,.45)); }
+.play span { width: 74px; height: 74px; border-radius: 50%; background: rgba(255,255,255,.92); display: grid; place-items: center; box-shadow: 0 10px 30px rgba(0,0,0,.4); }
+.play span::before { content: ''; border-style: solid; border-width: 13px 0 13px 21px; border-color: transparent transparent transparent #1b1724; margin-left: 5px; }
+.hero-shot .tag { position: absolute; left: 14px; bottom: 12px; color: #fff; font-weight: 600; font-size: 14px; }
+@media (max-width: 860px) { .hero { padding-top: 34px; } .hero .split { grid-template-columns: minmax(0, 1fr); gap: 28px; } }
+
+/* steps strip */
+.flow { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin: 28px 0 8px; }
+.flow a { text-decoration: none; color: inherit; background: var(--card); border: 1px solid var(--line); border-radius: var(--r); padding: 20px; box-shadow: var(--shadow); display: block; transition: transform .15s; }
+.flow a:hover { transform: translateY(-2px); }
+.flow .n { font: 800 13px Rubik, sans-serif; letter-spacing: .1em; color: var(--muted); }
+.flow h3 { font-size: 20px; margin: 6px 0 6px; }
+.flow p { color: var(--fg-2); margin: 0; font-size: 15px; }
+.dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-inline-end: 8px; vertical-align: 1px; }
+@media (max-width: 760px) { .flow { grid-template-columns: minmax(0, 1fr); } }
+
+/* sections */
+section.topic { padding: 56px 0; border-top: 1px solid var(--line); }
+section.topic:nth-of-type(even) { background: var(--bg-2); }
+.topic-head { display: flex; align-items: flex-end; gap: 16px; margin-bottom: 22px; flex-wrap: wrap; }
+.topic-head h2 { font-size: clamp(28px, 3.6vw, 38px); font-weight: 800; }
+.topic-head .lead { color: var(--fg-2); font-size: 18px; margin: 10px 0 0; max-width: 46em; }
+.topic-head .copy-link { margin-inline-start: auto; }
+.chip { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; padding: 4px 10px; border-radius: 999px; background: var(--card); border: 1px solid var(--line); color: var(--fg-2); }
+.topic-grid { display: grid; grid-template-columns: minmax(0, 1.45fr) minmax(0, 1fr); gap: 28px; align-items: start; }
+@media (max-width: 960px) { .topic-grid { grid-template-columns: minmax(0, 1fr); } }
+
+/* video */
+.player { background: var(--card); border: 1px solid var(--line); border-radius: 18px; box-shadow: var(--shadow); overflow: hidden; }
+.player video { display: block; width: 100%; aspect-ratio: 16 / 10; background: #0e0b15; }
+.player .meta { display: flex; align-items: center; gap: 10px; padding: 12px 16px; border-top: 1px solid var(--line); flex-wrap: wrap; }
+.player .meta b { font-size: 15px; }
+.player .meta .dur { color: var(--muted); font-size: 14px; }
+.player .meta .spacer { flex: 1; }
+.chapters { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 16px 14px; }
+.chapters button { font: 500 13px Rubik, sans-serif; color: var(--fg-2); background: var(--bg-2); border: 1px solid var(--line); border-radius: 999px; padding: 5px 11px; cursor: pointer; }
+.chapters button span { color: var(--muted); font-variant-numeric: tabular-nums; margin-inline-end: 6px; }
+.chapters button.on { background: var(--fg); color: var(--bg); border-color: var(--fg); }
+.chapters button.on span { color: inherit; opacity: .7; }
+details.transcript { border-top: 1px solid var(--line); }
+details.transcript summary { cursor: pointer; padding: 12px 16px; font-weight: 600; font-size: 14px; color: var(--fg-2); list-style: none; }
+details.transcript summary::-webkit-details-marker { display: none; }
+details.transcript summary::after { content: '＋'; float: right; color: var(--muted); }
+details.transcript[open] summary::after { content: '－'; }
+.transcript ol { margin: 0; padding: 0 16px 14px; list-style: none; max-height: 280px; overflow: auto; }
+.transcript li { display: flex; gap: 10px; padding: 4px 0; font-size: 14px; color: var(--fg-2); }
+.transcript li button { flex: none; font: 500 12px Rubik, sans-serif; color: var(--blue); background: none; border: 0; padding: 2px 0; cursor: pointer; font-variant-numeric: tabular-nums; min-width: 38px; text-align: start; }
+
+/* steps and notes */
+.card { background: var(--card); border: 1px solid var(--line); border-radius: var(--r); padding: 22px; box-shadow: var(--shadow); }
+.card + .card { margin-top: 16px; }
+.card h3 { font-size: 19px; margin-bottom: 12px; }
+ol.steps { counter-reset: s; list-style: none; margin: 0; padding: 0; }
+ol.steps li { counter-increment: s; position: relative; padding-inline-start: 40px; margin-bottom: 12px; color: var(--fg-2); }
+ol.steps li::before { content: counter(s); position: absolute; inset-inline-start: 0; top: 1px; width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; font: 700 13px Rubik, sans-serif; color: #160b1c; background: var(--grad); }
+ol.steps li b, ul.points li b { color: var(--fg); }
+ul.points { margin: 0; padding-inline-start: 20px; color: var(--fg-2); }
+ul.points li { margin-bottom: 8px; }
+.tip { border-inline-start: 4px solid var(--cyan); background: color-mix(in srgb, var(--cyan) 9%, var(--card)); padding: 12px 14px; border-radius: 10px; color: var(--fg-2); font-size: 15px; margin-top: 14px; }
+.tip b { color: var(--fg); }
+kbd { font: 600 13px Rubik, ui-monospace, monospace; background: var(--kbd); border: 1px solid var(--line-2); border-bottom-width: 2px; border-radius: 6px; padding: 1px 7px; white-space: nowrap; color: var(--fg); }
+.ui { font-weight: 600; color: var(--fg); background: var(--bg-2); border: 1px solid var(--line); border-radius: 6px; padding: 0 6px; white-space: nowrap; }
+.pinkb, .blueb, .violetb { font-weight: 700; }
+.pinkb { color: var(--pink); } .blueb { color: var(--blue); } .violetb { color: var(--violet); }
+.two { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; margin-top: 16px; }
+@media (max-width: 760px) { .two { grid-template-columns: minmax(0, 1fr); } }
+
+/* tables */
+.table { width: 100%; border-collapse: collapse; font-size: 15px; }
+.table th, .table td { text-align: start; padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+.table th { font-size: 13px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+.table td:first-child { font-weight: 600; white-space: nowrap; }
+.table .yes { color: var(--ok); font-weight: 700; }
+.table-scroll { overflow-x: auto; }
+
+/* features */
+.features { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+.feature { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 16px; }
+.feature .ic { width: 38px; height: 38px; border-radius: 10px; display: grid; place-items: center; background: var(--bg-2); margin-bottom: 10px; color: var(--fg); }
+.feature .ic svg { width: 20px; height: 20px; }
+.feature h3 { font-size: 16px; margin-bottom: 4px; }
+.feature p { font-size: 14px; color: var(--fg-2); margin: 0; }
+@media (max-width: 960px) { .features { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 520px) { .features { grid-template-columns: 1fr; } }
+
+/* prompt builder */
+.prompt { display: grid; gap: 10px; }
+.prompt label { font-size: 14px; font-weight: 600; color: var(--fg-2); display: grid; gap: 6px; }
+.prompt select, .prompt input { font: 15px Rubik, sans-serif; color: var(--fg); background: var(--bg); border: 1px solid var(--line-2); border-radius: 10px; padding: 9px 11px; }
+.prompt textarea { font: 14px/1.55 ui-monospace, 'SF Mono', Menlo, monospace; color: var(--fg); background: var(--bg); border: 1px solid var(--line-2); border-radius: 12px; padding: 12px; min-height: 200px; resize: vertical; width: 100%; }
+.prompt .row { display: grid; grid-template-columns: 1fr 1.4fr; gap: 10px; }
+@media (max-width: 620px) { .prompt .row { grid-template-columns: 1fr; } }
+
+/* faq */
+.faq details { background: var(--card); border: 1px solid var(--line); border-radius: 14px; margin-bottom: 10px; }
+.faq summary { cursor: pointer; padding: 14px 18px; font-weight: 600; list-style: none; }
+.faq summary::-webkit-details-marker { display: none; }
+.faq summary::after { content: '＋'; float: right; color: var(--muted); }
+.faq details[open] summary::after { content: '－'; }
+.faq details > div { padding: 0 18px 14px; color: var(--fg-2); }
+footer { padding: 34px 0 48px; border-top: 1px solid var(--line); color: var(--muted); font-size: 14px; }
+footer .wrap { display: flex; gap: 16px; flex-wrap: wrap; align-items: center; }
+footer a { color: var(--fg-2); }
+.toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); background: var(--fg); color: var(--bg); padding: 10px 16px; border-radius: 10px; font-weight: 600; opacity: 0; transition: opacity .2s; pointer-events: none; z-index: 50; }
+.toast.on { opacity: 1; }
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="wrap">
+    <a class="logo grad" href="#top">PNG Font Studio<small>Guide</small></a>
+    <nav class="nav" aria-label="Guide sections">
+      <a href="#workspace">Workspace</a><a href="#fonts">Fonts</a><a href="#still">Still</a><a href="#animated">Animated</a><a href="#export">Export</a><a href="#more">More</a>
+    </nav>
+    <span class="spacer"></span>
+    <button class="btn icon-btn" id="theme" type="button" aria-label="Light or dark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg></button>
+    <a class="btn primary open-app" href="../" target="_blank" rel="noopener"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17 17 7M7 7h10v10"/></svg><span>Open the app</span></a>
+  </div>
+</header>
+
+<main id="top">
+  <section class="hero">
+    <div class="wrap split">
+      <div>
+        <div class="eyebrow">Guide</div>
+        <h1>Turn AI letter sheets into <span class="grad">fonts</span>, then make titles that move.</h1>
+        <p class="lead">PNG Font Studio turns a sheet of letters drawn by an AI image tool into a font you can type with. Then you design titles with it, animate them, and export images, videos or an After Effects composition. It all runs in your browser.</p>
+        <div class="ctas">
+          <a class="btn primary" href="../" target="_blank" rel="noopener">Open the app</a>
+          <a class="btn" href="#workspace">Watch the tour</a>
+        </div>
+      </div>
+      <a class="hero-shot" href="#workspace" aria-label="Watch the workspace video">
+        <img src="media/ui.jpg" alt="The PNG Font Studio workspace with a title on the stage" width="1280" height="800">
+        <span class="play" aria-hidden="true"><span></span></span>
+        <span class="tag">The workspace · video</span>
+      </a>
+    </div>
+    <div class="wrap">
+      <div class="flow">
+        <a href="#fonts"><div class="n"><span class="dot" style="background:var(--violet)"></span>STEP 1</div><h3>Make a font</h3><p>Import an AI glyph sheet. The app finds the grid, cuts out each letter and places it on the baseline.</p></a>
+        <a href="#still"><div class="n"><span class="dot" style="background:var(--pink)"></span>STEP 2</div><h3>Design a title</h3><p>Type straight on the stage, style letters, add effects and warps. Still titles turn the app pink.</p></a>
+        <a href="#animated"><div class="n"><span class="dot" style="background:var(--blue)"></span>STEP 3</div><h3>Animate and export</h3><p>Pick how it arrives, moves on screen and leaves (the app turns blue), then export images or video.</p></a>
+      </div>
+    </div>
+  </section>
+
+  <section class="topic" id="features" style="background:transparent">
+    <div class="wrap">
+      <div class="topic-head"><div><h2>What it does</h2><p class="lead">Everything you need to go from a picture of letters to a finished title.</p></div></div>
+      <div class="features">
+        <div class="feature"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg></div><h3>Fonts from glyph sheets</h3><p>Grid detection, background removal, letter recognition, and automatic placement on the baseline.</p></div>
+        <div class="feature"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="13.5" cy="6.5" r="1.5"/><circle cx="17.5" cy="10.5" r="1.5"/><circle cx="8.5" cy="7.5" r="1.5"/><circle cx="6.5" cy="12.5" r="1.5"/><path d="M12 2a10 10 0 1 0 0 20 2 2 0 0 0 2-2v-1a2 2 0 0 1 2-2h1a3 3 0 0 0 3-3A10 10 0 0 0 12 2Z"/></svg></div><h3>Colour variants</h3><p>Recolour a whole font from its own artwork with presets, hue shifts or gradient maps.</p></div>
+        <div class="feature"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7V4h16v3M9 20h6M12 4v16"/></svg></div><h3>Live text on the stage</h3><p>Type, select and style letters right on the artboard, with kerning, tracking and baseline shift.</p></div>
+        <div class="feature"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="m12 3 1.9 5.8L20 9l-4.9 3.6L16.9 19 12 15.3 7.1 19l1.8-6.4L4 9l6.1-.2Z"/></svg></div><h3>Effects and styles</h3><p>Stroke, shadows, glows, bevel, 3D extrude, long shadow, reflection and more, or one-click styles.</p></div>
+        <div class="feature"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M2 12c3-6 7-6 10 0s7 6 10 0"/></svg></div><h3>Warp and paths</h3><p>Bend a title like Photoshop’s Warp Text, or set the letters along an arc, circle or wave.</p></div>
+        <div class="feature"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="2" y="2" width="20" height="20" rx="2.5"/><path d="M7 2v20M17 2v20M2 12h20M2 7h5M2 17h5M17 17h5M17 7h5"/></svg></div><h3>Animation presets</h3><p>Dozens of ways in, on screen and out, each tuned by duration, stagger and order.</p></div>
+        <div class="feature"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg></div><h3>Export anywhere</h3><p>PNG, PNG sequence, WebM, MOV, MP4 with a matte, GIF, animated PNG and WebP, After Effects.</p></div>
+        <div class="feature"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="m5 8 6 6M4 14l6-6 2-3M2 5h12M7 2h1M22 22l-5-10-5 10M14 18h6"/></svg></div><h3>English and Hebrew</h3><p>The whole app in either language, with right-to-left layout and Hebrew text in titles.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== workspace ===================== -->
+  <section class="topic" id="workspace">
+    <div class="wrap">
+      <div class="topic-head">
+        <div><span class="chip">Video · <span data-dur="ui">2 min</span></span><h2 style="margin-top:10px">The workspace</h2><p class="lead">Where everything is, how the colours tell you what you’re making, and how to make the layout yours.</p></div>
+        <button class="btn copy-link" type="button" data-link="workspace">Copy link</button>
+      </div>
+      <div class="topic-grid">
+        <div class="player" data-video="ui"><video controls preload="metadata" playsinline poster="media/ui.jpg" src="media/ui.mp4" aria-label="Video: the workspace"></video></div>
+        <div>
+          <div class="card">
+            <h3>Find your way around</h3>
+            <ul class="points">
+              <li><b>Top bar.</b> <span class="ui">Titles</span> designs and animates; <span class="ui">Fonts</span> makes the letters. Undo and redo sit next to them.</li>
+              <li><b>The colour tells you what you’re making.</b> <span class="pinkb">Pink</span> is Still (images), <span class="blueb">blue</span> is Animated (video), and <span class="violetb">violet</span> is the Fonts workspace.</li>
+              <li><b>Left panel.</b> Layers, the artboard size and background, and your title files.</li>
+              <li><b>Right panel, the inspector.</b> Tabs for Text, Align, Effects, Warp, Animate and Layer.</li>
+              <li><b>Draggable panels.</b> Drag the thin dividers to make either panel wider or narrower. The app remembers it.</li>
+              <li><b>Language and theme.</b> Switch between English and עב (Hebrew, right to left), and between dark and light.</li>
+              <li><b>Help.</b> A guided tour and every keyboard shortcut. Press <kbd>?</kbd> at any time.</li>
+            </ul>
+          </div>
+          <div class="card">
+            <h3>The stage toolbar</h3>
+            <div class="table-scroll"><table class="table">
+              <tr><td>Select and move</td><td>Pick and drag titles <kbd>V</kbd></td></tr>
+              <tr><td>Text tool</td><td>Click the artboard to add a title <kbd>T</kbd></td></tr>
+              <tr><td>Pan</td><td>Drag the view <kbd>H</kbd> (or hold <kbd>Space</kbd>)</td></tr>
+              <tr><td>Zoom out / in</td><td><kbd>Ctrl</kbd> + <kbd>−</kbd> / <kbd>=</kbd>, or <kbd>Ctrl</kbd> + wheel</td></tr>
+              <tr><td>Fit artboard</td><td><kbd>Ctrl</kbd> + <kbd>0</kbd></td></tr>
+              <tr><td>Text guides</td><td>Baseline and friends while you type</td></tr>
+              <tr><td>Title-safe</td><td>Frames that keep titles clear of the screen edge</td></tr>
+              <tr><td>Preview background</td><td>Checkerboard, black, greys, white or any colour. For viewing only; exports stay transparent.</td></tr>
+            </table></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== fonts ===================== -->
+  <section class="topic" id="fonts">
+    <div class="wrap">
+      <div class="topic-head">
+        <div><span class="chip">Video · <span data-dur="fonts">3 min</span></span><h2 style="margin-top:10px">Make a font</h2><p class="lead">From a sheet of letters drawn by an AI image tool to a font you can type with, then a colour version of it.</p></div>
+        <button class="btn copy-link" type="button" data-link="fonts">Copy link</button>
+      </div>
+      <div class="topic-grid">
+        <div>
+          <div class="player" data-video="fonts"><video controls preload="metadata" playsinline poster="media/fonts.jpg" src="media/fonts.mp4" aria-label="Video: make a font"></video></div>
+          <div class="card" style="margin-top:16px" id="prompts">
+            <h3>Get a glyph sheet: prompt builder</h3>
+            <p style="color:var(--fg-2)">Ask an AI image tool for a sheet of letters in a grid. The importer recognises these layouts and names every cell for you. Describe the look, pick a sheet, and copy the prompt. Results vary by tool: if a letter comes out wrong, generate that sheet again, or fix the cell in the importer.</p>
+            <div class="prompt">
+              <div class="row">
+                <label>Sheet<select id="p-sheet"></select></label>
+                <label>Look<input id="p-style" type="text" value="glossy bubble letters, blue-to-pink gradient, thick white outline, soft 3D depth"></label>
+              </div>
+              <textarea id="p-out" readonly aria-label="Prompt to copy"></textarea>
+              <div><button class="btn primary" type="button" id="p-copy">Copy prompt</button></div>
+            </div>
+          </div>
+        </div>
+        <div>
+          <div class="card">
+            <h3>Step by step</h3>
+            <ol class="steps">
+              <li>Open <span class="ui">Fonts</span>. The app turns violet. Bubble Blue, Orange and Pearl come with it.</li>
+              <li>Press <span class="ui">Import sheets</span>, then <span class="ui">Choose files</span> or drop the sheet on the window. Add several sheets at once if you have them.</li>
+              <li>The app detects the grid. If a line is off, drag the blue lines, or set <b>Rows</b> and <b>Columns</b> and press <span class="ui">Detect lines</span> or <span class="ui">Even grid</span>.</li>
+              <li>Under <b>Characters</b>, check the recognised layout. For your own layout, type the characters in reading order (<code>\s</code> skips a cell).</li>
+              <li>Check the letters under the sheet; type the right character into any cell that’s wrong.</li>
+              <li>Under <b>Import into</b>, choose <span class="ui">New font</span>, name it, and press <span class="ui">Import</span>.</li>
+              <li>Click a glyph to edit it: drag the letter to move it, drag the dotted line to change its spacing, or type exact <b>Baseline</b>, <b>Scale</b>, <b>Left</b> and <b>Right</b> values.</li>
+              <li>Use <span class="ui">Auto-place all</span> to put every letter on the baseline, and <span class="ui">Even out sizes</span> if letters were stretched to fill their cells.</li>
+              <li>Type in the sample line to try the font on real words.</li>
+            </ol>
+            <div class="tip"><b>Single letters:</b> drop PNG files named by their character, like <code>A.png</code>, <code>exclam.png</code> or <code>uni05D0.png</code> (Hebrew alef), or select a slot and paste an image.</div>
+          </div>
+          <div class="card">
+            <h3>Guides, variants and files</h3>
+            <ul class="points">
+              <li><b>Guides</b> show the baseline, cap height, x-height, ascender, descender, advance width and image bounds. Turn each on or off from <span class="ui">Guides</span>.</li>
+              <li><b>Edit image</b> flips, rotates, trims and cleans specks off a glyph.</li>
+              <li><b>Colour variants</b> recolour the whole font from its artwork: <span class="ui">Face</span> replaces the letter face colour, <span class="ui">Hue</span> shifts all colours, <span class="ui">Gradient</span> maps them to a new gradient. <span class="ui">Create variant</span> makes a new font; <span class="ui">Apply to this font</span> changes it in place.</li>
+              <li><b>Save font file</b> keeps a copy to share or open on another computer (<span class="ui">Open font</span>).</li>
+              <li><b>Export PSD</b> sends every letter to Photoshop, as stacked layers in one glyph box or as a full sheet. Edit there, save, then <span class="ui">Update from PSD</span>. Letters you didn’t touch stay exactly as they were.</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== still ===================== -->
+  <section class="topic" id="still">
+    <div class="wrap">
+      <div class="topic-head">
+        <div><span class="chip"><span class="dot" style="background:var(--pink);margin:0"></span>Video · <span data-dur="still">2 min</span></span><h2 style="margin-top:10px">Still titles</h2><p class="lead">Design a title for an image: type on it live, move it around, style it.</p></div>
+        <button class="btn copy-link" type="button" data-link="still">Copy link</button>
+      </div>
+      <div class="topic-grid">
+        <div class="player" data-video="still"><video controls preload="metadata" playsinline poster="media/still.jpg" src="media/still.mp4" aria-label="Video: still titles"></video></div>
+        <div>
+          <div class="card">
+            <h3>Step by step</h3>
+            <ol class="steps">
+              <li>Press <span class="ui">Still</span> in the top bar. The app turns <span class="pinkb">pink</span>.</li>
+              <li>Press <kbd>T</kbd> and click the artboard to add a title, or double-click a title to edit it. Type: it updates live.</li>
+              <li>Select letters (drag, <kbd>Shift</kbd> + arrows, double-click a word) to style just those: size, tracking, colour, case, underline.</li>
+              <li>Press <kbd>Esc</kbd> to stop typing. Drag the title to move it, a corner to scale, the round handle to rotate (<kbd>Shift</kbd> snaps to 15°). Arrow keys nudge it.</li>
+              <li><b>Effects:</b> click a style, then fine-tune each effect in the list. The top effect is drawn on top.</li>
+              <li><b>Warp:</b> bend the whole title, or set it along a path.</li>
+              <li>Set the artboard size and background on the left, and export (see <a href="#export">Export</a>).</li>
+            </ol>
+          </div>
+          <div class="card">
+            <h3>Good to know</h3>
+            <ul class="points">
+              <li><b>Text tab:</b> font, size, tracking, kerning (optical, metrics or none, plus pair kerning with <kbd>Alt</kbd> + <kbd>←</kbd>/<kbd>→</kbd>), baseline shift, scale, rotate and slant, case, colour and letter opacity.</li>
+              <li><b>Align tab:</b> alignment, direction, indents, line spacing, space before and after, and point or area text.</li>
+              <li><b>Layer tab:</b> position, scale, rotation, flip, centring, opacity and blend mode.</li>
+              <li><b>A plain text box</b> sits at the top of the Text tab, for long edits, pasting, or typing on a phone.</li>
+              <li><b>Your work saves itself</b> in this browser. <span class="ui">Save title</span> makes a file, fonts included, to back up or open elsewhere.</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== animated ===================== -->
+  <section class="topic" id="animated">
+    <div class="wrap">
+      <div class="topic-head">
+        <div><span class="chip"><span class="dot" style="background:var(--blue);margin:0"></span>Video · <span data-dur="animated">2 min</span></span><h2 style="margin-top:10px">Animated titles</h2><p class="lead">How a title arrives, what it does while it’s on screen, and how it leaves.</p></div>
+        <button class="btn copy-link" type="button" data-link="animated">Copy link</button>
+      </div>
+      <div class="topic-grid">
+        <div class="player" data-video="animated"><video controls preload="metadata" playsinline poster="media/animated.jpg" src="media/animated.mp4" aria-label="Video: animated titles"></video></div>
+        <div>
+          <div class="card">
+            <h3>Three parts</h3>
+            <ol class="steps">
+              <li><b>Transition in:</b> how the title arrives. Presets are grouped as cute, cartoony, professional and fun. Set <b>Duration</b>, <b>Stagger</b> between letters, what moves (<span class="ui">Letters</span>, <span class="ui">Words</span>, <span class="ui">Lines</span>, <span class="ui">All</span>), the <b>Order</b> and a <b>Delay</b>.</li>
+              <li><b>While on screen (loop):</b> a gentle movement between entrance and exit, like Wave, Float, Bob, Pulse, Rainbow or Shimmer. Set its <b>Period</b> and <b>Strength</b>.</li>
+              <li><b>Transition out:</b> how it leaves, such as Pop out, Float away, Explode or Fade down.</li>
+            </ol>
+            <div class="tip"><b>Start here:</b> press <span class="ui">Animated</span> in the top bar (the app turns <span class="blueb">blue</span>), select a title, and open the <span class="ui">Animate</span> tab. <span class="ui">Preview</span> replays just that title.</div>
+          </div>
+          <div class="card">
+            <h3>The player</h3>
+            <ul class="points">
+              <li><b>Play / pause</b> with the button or <kbd>K</kbd>; drag the bar to scrub.</li>
+              <li><b>Hold</b> sets how long the title stays on screen between its entrance and exit.</li>
+              <li><b>Loop</b> repeats playback while you work.</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== export ===================== -->
+  <section class="topic" id="export">
+    <div class="wrap">
+      <div class="topic-head">
+        <div><span class="chip">Video · <span data-dur="export">2 min</span></span><h2 style="margin-top:10px">Export</h2><p class="lead">Images, videos with or without transparency, and editable After Effects compositions.</p></div>
+        <button class="btn copy-link" type="button" data-link="export">Copy link</button>
+      </div>
+      <div class="topic-grid">
+        <div>
+          <div class="player" data-video="export"><video controls preload="metadata" playsinline poster="media/export.jpg" src="media/export.mp4" aria-label="Video: export"></video></div>
+          <div class="card" style="margin-top:16px">
+            <h3>Which format?</h3>
+            <div class="table-scroll"><table class="table">
+              <tr><th>Format</th><th>Transparent</th><th>Best for</th></tr>
+              <tr><td>PNG image</td><td class="yes">Yes</td><td>One frame: the current frame, or a Still title.</td></tr>
+              <tr><td>PNG sequence</td><td class="yes">Yes</td><td>Every frame in a ZIP, for After Effects, Premiere, DaVinci, Final Cut.</td></tr>
+              <tr><td>WebM video</td><td class="yes">Yes</td><td>Video with transparency for the web, OBS and Chrome.</td></tr>
+              <tr><td>MOV video</td><td class="yes">Yes</td><td>Lossless video with transparency (QuickTime Animation).</td></tr>
+              <tr><td>MP4 video</td><td>With matte</td><td>Plays everywhere. A transparent title comes as a ZIP with a black-and-white matte video.</td></tr>
+              <tr><td>GIF</td><td>Hard edges</td><td>Chat stickers.</td></tr>
+              <tr><td>Animated PNG</td><td class="yes">Yes</td><td>Soft transparency that plays in every browser.</td></tr>
+              <tr><td>Animated WebP</td><td class="yes">Yes</td><td>Small files with soft transparency.</td></tr>
+              <tr><td>After Effects</td><td class="yes">Yes</td><td>An editable composition: a script builds it with each letter on its own layer.</td></tr>
+            </table></div>
+          </div>
+        </div>
+        <div>
+          <div class="card">
+            <h3>Step by step</h3>
+            <ol class="steps">
+              <li>Press <span class="ui">Export</span> in the top bar.</li>
+              <li>Pick a format. Still titles show the image formats only; switch to Animated for video.</li>
+              <li>Choose the <b>Size</b>: 1× is the artboard size, 2× twice as sharp.</li>
+              <li>Options: <b>Trim to the title</b> crops empty space, <b>Include background colour</b> fills behind the title, <b>Only the selected layer</b> exports one title. Video formats add frame rate and looping.</li>
+              <li>Press <span class="ui">Export</span>. The file downloads.</li>
+            </ol>
+          </div>
+          <div class="card">
+            <h3>Transparency in video editors</h3>
+            <ul class="points">
+              <li><b>MP4 + matte:</b> put the matte video on the track above the colour video, and set it as a luma (track) matte. White shows the title; black hides the background.</li>
+              <li><b>After Effects:</b> unzip, then choose <b>File › Scripts › Run Script File</b> and pick the <code>.jsx</code>. Animation becomes keyframes on each letter; effects without an After Effects match are listed in the README.</li>
+              <li><b>MOV</b> works on this website. Inside claude.ai, pages can’t save MOV files; use WebM there, or open the app from this site.</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== more ===================== -->
+  <section class="topic" id="more">
+    <div class="wrap">
+      <div class="topic-head"><div><h2>Good to know</h2><p class="lead">Shortcuts, saving your work, phones, Hebrew, privacy, and answers to common questions.</p></div><button class="btn copy-link" type="button" data-link="more">Copy link</button></div>
+      <div class="two" style="margin-top:0">
+        <div class="card" id="shortcuts">
+          <h3>Keyboard shortcuts</h3>
+          <div class="table-scroll"><table class="table">
+            <tr><td><kbd>Ctrl</kbd> <kbd>Z</kbd> / <kbd>Ctrl</kbd> <kbd>Shift</kbd> <kbd>Z</kbd></td><td>Undo / redo</td></tr>
+            <tr><td><kbd>V</kbd> <kbd>T</kbd> <kbd>H</kbd></td><td>Select, text tool, hand</td></tr>
+            <tr><td><kbd>Enter</kbd> or double-click</td><td>Edit the selected title’s text</td></tr>
+            <tr><td><kbd>Esc</kbd></td><td>Finish typing</td></tr>
+            <tr><td>Arrow keys</td><td>Nudge 1 px (<kbd>Shift</kbd>: 10 px)</td></tr>
+            <tr><td><kbd>Alt</kbd> <kbd>←</kbd> <kbd>→</kbd></td><td>Kern the pair at the caret, or track a selection or title</td></tr>
+            <tr><td><kbd>Alt</kbd> <kbd>↑</kbd> <kbd>↓</kbd></td><td>Line spacing (<kbd>Shift</kbd>: baseline shift)</td></tr>
+            <tr><td><kbd>Ctrl</kbd> <kbd>Shift</kbd> <kbd>&gt;</kbd> <kbd>&lt;</kbd></td><td>Bigger / smaller text</td></tr>
+            <tr><td><kbd>Ctrl</kbd> <kbd>D</kbd> · <kbd>Delete</kbd></td><td>Duplicate · delete a title</td></tr>
+            <tr><td><kbd>Ctrl</kbd> <kbd>0</kbd> · <kbd>Ctrl</kbd> + wheel</td><td>Fit · zoom</td></tr>
+            <tr><td><kbd>K</kbd></td><td>Play / pause</td></tr>
+            <tr><td><kbd>?</kbd></td><td>All shortcuts in the app</td></tr>
+          </table></div>
+          <p style="color:var(--muted);font-size:14px;margin-top:10px">On a Mac, <kbd>Ctrl</kbd> is <kbd>⌘</kbd> and <kbd>Alt</kbd> is <kbd>⌥</kbd>.</p>
+        </div>
+        <div>
+          <div class="card">
+            <h3>Saving and moving your work</h3>
+            <ul class="points">
+              <li>Titles and fonts save themselves <b>in the browser you’re using</b>, on this device.</li>
+              <li>Another browser, a private window, or clearing this site’s data won’t have them. Keep copies with <span class="ui">Save title</span> (fonts included) and <span class="ui">Save font file</span>.</li>
+              <li>To move to another computer, save a title file there and <span class="ui">Open title</span> here.</li>
+            </ul>
+          </div>
+          <div class="card">
+            <h3>Phones and tablets</h3>
+            <ul class="points">
+              <li>On a phone, the panels share a sheet under the preview: <span class="ui">Layers</span> and <span class="ui">Edit</span>. Drag its handle to make it taller or shorter.</li>
+              <li>Double-tap a title to type on it; the keyboard opens. The text box in the Text tab is handy for long edits.</li>
+            </ul>
+          </div>
+          <div class="card">
+            <h3>Privacy</h3>
+            <p style="color:var(--fg-2);margin:0">Everything runs in your browser. Your sheets, fonts, titles and exports stay on your device; nothing is uploaded.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="card" style="margin-top:16px">
+        <h3>Hebrew and right to left</h3>
+        <ul class="points">
+          <li>Switch the app to Hebrew with <span class="ui">עב</span> (or <span class="ui">Help › עברית</span> on a phone). The layout mirrors for right to left.</li>
+          <li>Type Hebrew in a title, and it runs right to left on its own, even mixed with English and numbers.</li>
+          <li>The built-in fonts have Latin letters. For Hebrew, import a sheet of Hebrew letters and type them in reading order in the importer’s <b>Characters</b> box. The glyph sheet shows Hebrew right to left.</li>
+        </ul>
+      </div>
+
+      <h3 style="font-size:22px;margin:34px 0 14px">Questions</h3>
+      <div class="faq">
+        <details><summary>A letter shows as a dashed box</summary><div>The font has no glyph for that character. Add it to the font (import another sheet, <span class="ui">Add glyphs</span>, or paste an image into the empty slot), or use another font for it.</div></details>
+        <details><summary>The importer split the sheet in the wrong places</summary><div>Set the <b>Rows</b> and <b>Columns</b> you have and press <span class="ui">Detect lines</span>, or <span class="ui">Even grid</span> for a regular grid, then drag any blue line into place. Partial sheets work too.</div></details>
+        <details><summary>Letters from different sheets are different sizes</summary><div>Leave <span class="ui">Even out sizes</span> on when importing. The reference H on sheets 2 to 7 matches each sheet’s size to your capitals; it isn’t imported itself.</div></details>
+        <details><summary>My video export fails or isn’t offered</summary><div>Video is made by your browser’s built-in encoders. Use Chrome or Edge for WebM and MP4, or export a PNG sequence, which works everywhere. A Still title only exports images: switch to Animated for video.</div></details>
+        <details><summary>My MP4 has a black background</summary><div>MP4 can’t store transparency. Use the matte video that comes with it (see <a href="#export">Transparency in video editors</a>), or export WebM, MOV or a PNG sequence instead.</div></details>
+        <details><summary>MOV says “Available in the standalone app”</summary><div>That happens inside claude.ai, where pages can’t save MOV files. Open the app from this website and MOV works.</div></details>
+        <details><summary>Where did my work go?</summary><div>It’s kept in the browser and device you made it on. If you cleared site data or switched browsers, open a saved title file. Save one now and then to be safe.</div></details>
+        <details><summary>Exports look soft</summary><div>Export at 2× or 4×, and import sheets at a high resolution: the app never makes a letter sharper than its source image.</div></details>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <span class="grad" style="font-weight:800">PNG Font Studio</span>
+    <a href="../">Open the app</a>
+    <a href="#prompts">Prompt builder</a>
+    <a href="#shortcuts">Shortcuts</a>
+    <span style="flex:1"></span>
+    <span>Videos recorded from the app itself.</span>
+  </div>
+</footer>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script>
+(() => {
+  // theme: follows the system until chosen here
+  const root = document.documentElement;
+  try { const t = localStorage.getItem('pfs-guide-theme'); if (t) root.dataset.theme = t; } catch {}
+  document.getElementById('theme').addEventListener('click', () => {
+    const dark = root.dataset.theme ? root.dataset.theme === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches;
+    root.dataset.theme = dark ? 'light' : 'dark';
+    try { localStorage.setItem('pfs-guide-theme', root.dataset.theme); } catch {}
+  });
+
+  const toastEl = document.getElementById('toast');
+  let toastT = 0;
+  const toast = (msg) => { toastEl.textContent = msg; toastEl.classList.add('on'); clearTimeout(toastT); toastT = setTimeout(() => toastEl.classList.remove('on'), 1800); };
+  const copy = async (text, msg) => { try { await navigator.clipboard.writeText(text); toast(msg); } catch { toast('Copy failed: select and copy by hand'); } };
+  for (const b of document.querySelectorAll('[data-link]')) b.addEventListener('click', () => copy(location.href.split('#')[0] + '#' + b.dataset.link, 'Link copied'));
+
+  // videos: chapters and transcript from media/<name>.json (written by the recorder)
+  const fmt = (s) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
+  for (const box of document.querySelectorAll('[data-video]')) {
+    const name = box.dataset.video, video = box.querySelector('video');
+    fetch(`media/${name}.json`).then((r) => r.json()).then((meta) => {
+      for (const d of document.querySelectorAll(`[data-dur="${name}"]`)) d.textContent = fmt(meta.duration);
+      const bar = document.createElement('div'); bar.className = 'meta';
+      bar.innerHTML = `<b>${meta.title}</b><span class="dur">${fmt(meta.duration)}</span><span class="spacer"></span><span class="dur">Chapters</span>`;
+      const chaps = document.createElement('div'); chaps.className = 'chapters';
+      const seek = (t) => { video.currentTime = t; video.play().catch(() => {}); };
+      const btns = meta.chapters.map((c) => {
+        const b = document.createElement('button'); b.type = 'button';
+        b.innerHTML = `<span>${fmt(c.t)}</span>`; b.append(c.title);
+        b.addEventListener('click', () => seek(c.t));
+        chaps.append(b); return b;
+      });
+      video.addEventListener('timeupdate', () => {
+        let on = -1; meta.chapters.forEach((c, i) => { if (video.currentTime >= c.t - 0.05) on = i; });
+        btns.forEach((b, i) => b.classList.toggle('on', i === on));
+      });
+      const tr = document.createElement('details'); tr.className = 'transcript';
+      tr.innerHTML = '<summary>Transcript</summary><ol></ol>';
+      for (const line of meta.transcript) {
+        const li = document.createElement('li'), b = document.createElement('button');
+        b.type = 'button'; b.textContent = fmt(line.t); b.addEventListener('click', () => seek(line.t));
+        li.append(b, document.createTextNode(line.text)); tr.querySelector('ol').append(li);
+      }
+      box.append(bar, chaps, tr);
+    }).catch(() => {});
+  }
+
+  // nav: highlight the section in view
+  const links = [...document.querySelectorAll('.nav a')];
+  const io = new IntersectionObserver((es) => { for (const e of es) if (e.isIntersecting) for (const a of links) a.classList.toggle('on', a.getAttribute('href') === '#' + e.target.id); }, { rootMargin: '-45% 0px -50% 0px' });
+  for (const a of links) { const s = document.querySelector(a.getAttribute('href')); if (s) io.observe(s); }
+
+  // prompt builder: the layouts the importer recognises (src/core/charsets.js)
+  const SHEETS = [
+    ['Sheet 1 · capitals', 7, ['A B C D E F G', 'H I J K L M N', 'O P Q R S T U', 'V W X Y Z ! ?'], false],
+    ['Sheet 2 · lowercase', 7, ['a b c d e f g', 'h i j k l m n', 'o p q r s t u', 'v w x y z H .'], true],
+    ['Sheet 3 · digits & punctuation', 7, ['0 1 2 3 4 5 6', "7 8 9 , : ; '", '" ‘ ’ “ ” ¡ ¿', '- – — … • ` H'], true],
+    ['Sheet 4 · brackets & signs', 7, ['( ) [ ] { } /', '\\ | _ < > ~ ^', '& * # @ % ‰ §', '¶ † ‡ © ® ™ H'], true],
+    ['Sheet 5 · currency & maths', 7, ['$ € £ ¥ ₪ ¢ ₹', '₽ ₩ ₿ ° + − ×', '÷ = ≠ ≈ ≤ ≥ ±', '∞ √ π Σ µ Ω H'], true],
+    ['Sheet 6 · more maths', 3, ['∆ ∂ ∫', '∏ ∈ ∩', '∪ ¬ H'], true],
+  ];
+  const sel = document.getElementById('p-sheet'), style = document.getElementById('p-style'), out = document.getElementById('p-out');
+  SHEETS.forEach(([n], i) => sel.append(new Option(n, i)));
+  const build = () => {
+    const [, cols, rows, ref] = SHEETS[+sel.value];
+    out.value = [
+      `A font glyph sheet: ${style.value.trim() || 'bold display letters'}.`,
+      `Exactly ${cols} columns and ${rows.length} rows of characters in a neat, evenly spaced grid, one character centred in each cell.`,
+      'Every character the same height and sitting on the same baseline, with clear space between cells.',
+      'A plain, flat, single-colour background. No grid lines, no labels, no extra text, nothing touching the cell edges.',
+      'Characters, row by row:',
+      ...rows.map((r, i) => `Row ${i + 1}: ${r}`),
+      ref ? 'The H in the last row is only a size reference: draw it exactly like the capital H on sheet 1.' : '',
+    ].filter(Boolean).join('\n');
+  };
+  sel.addEventListener('change', build); style.addEventListener('input', build); build();
+  document.getElementById('p-copy').addEventListener('click', () => copy(out.value, 'Prompt copied'));
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,113 @@
+{
+ "name": "ui",
+ "title": "The workspace",
+ "duration": 99.3,
+ "chapters": [
+  {
+   "t": 4.9,
+   "title": "The main window"
+  },
+  {
+   "t": 15,
+   "title": "Still is pink, Animated is blue"
+  },
+  {
+   "t": 27.6,
+   "title": "Panels"
+  },
+  {
+   "t": 48,
+   "title": "The stage toolbar"
+  },
+  {
+   "t": 73.2,
+   "title": "English and Hebrew"
+  },
+  {
+   "t": 81.9,
+   "title": "Dark and light"
+  },
+  {
+   "t": 87,
+   "title": "Help and shortcuts"
+  }
+ ],
+ "transcript": [
+  {
+   "t": 0.4,
+   "text": "Welcome to PNG Font Studio. Let’s take a quick tour of the workspace."
+  },
+  {
+   "t": 4.9,
+   "text": "Up top, Titles is where you design and animate. Fonts is where you make the letters themselves."
+  },
+  {
+   "t": 10.9,
+   "text": "Undo and redo sit next to them. Every change can be undone."
+  },
+  {
+   "t": 15,
+   "text": "Still makes images. Animated makes videos. The interface colour tells you which one you’re in."
+  },
+  {
+   "t": 20.6,
+   "text": "In Still, the interface turns pink."
+  },
+  {
+   "t": 23.4,
+   "text": "In Animated, it turns blue, and a player appears under the stage."
+  },
+  {
+   "t": 28.8,
+   "text": "On the left are your layers, the artboard size, and your title files."
+  },
+  {
+   "t": 33.1,
+   "text": "On the right, the inspector edits whatever you select: text, alignment, effects, warp, animation, and the layer."
+  },
+  {
+   "t": 40.2,
+   "text": "Every divider between panels can be dragged. Make a panel wider or narrower to suit your screen."
+  },
+  {
+   "t": 48,
+   "text": "The toolbar over the stage holds the tools and the view controls."
+  },
+  {
+   "t": 52.2,
+   "text": "Select and move, add text, and pan around."
+  },
+  {
+   "t": 55.3,
+   "text": "Zoom out, zoom in, and fit the artboard to the window."
+  },
+  {
+   "t": 58.7,
+   "text": "Show the text guides while you type, and the title-safe frame that keeps titles clear of the screen edge."
+  },
+  {
+   "t": 65.4,
+   "text": "And the preview background, to see your title on dark, light, or a colour of your own. It’s for viewing only, never exported."
+  },
+  {
+   "t": 73.2,
+   "text": "The app speaks English and Hebrew. Switch here, and the whole layout mirrors for right to left."
+  },
+  {
+   "t": 79.7,
+   "text": "Switch back to English the same way."
+  },
+  {
+   "t": 81.9,
+   "text": "This button switches between dark and light."
+  },
+  {
+   "t": 87,
+   "text": "Help opens a short guided tour, and every keyboard shortcut. You can also press the question mark key at any time."
+  },
+  {
+   "t": 95.7,
+   "text": "That’s the workspace. Next, let’s make a font."
+  }
+ ]
+}

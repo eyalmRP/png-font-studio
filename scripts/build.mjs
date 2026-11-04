@@ -2,7 +2,7 @@
 //   dist/artifact/index.html (+ fonts/*.json, *.webp, psd.*.js) — the claude.ai artifact (page content only; fonts
 //                                                and the on-demand Photoshop script beside it)
 //   dist/png-font-studio.html                 — a standalone single file with the fonts embedded
-//   dist/site/                                — the artifact's files as a complete web page (GitHub Pages)
+//   dist/site/                                — the artifact's files as a complete web page, and the guide (GitHub Pages)
 import fs from 'node:fs';
 import path from 'node:path';
 import * as esbuild from 'esbuild';
@@ -71,6 +71,8 @@ ${bodyStart}
   fs.rmSync(site, { recursive: true, force: true });
   fs.cpSync(path.join(dist, 'artifact'), site, { recursive: true });
   const icon = `<link rel="icon" href="data:image/svg+xml,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><defs><linearGradient id="g" x1="0" x2="1"><stop offset="0" stop-color="#ff4fa3"/><stop offset="1" stop-color="#3ad0ff"/></linearGradient></defs><rect width="64" height="64" rx="14" fill="#1a1823"/><text x="32" y="45" font-family="Arial Black,Arial,sans-serif" font-weight="900" font-size="34" text-anchor="middle" fill="url(#g)">Aa</text></svg>')}">`;
+  // the help guide (guide/: the page and its videos, recorded by scripts/guide) sits beside the app at guide/
+  if (fs.existsSync(path.join(root, 'guide/index.html'))) fs.cpSync(path.join(root, 'guide'), path.join(site, 'guide'), { recursive: true });
   fs.writeFileSync(path.join(site, 'index.html'), `<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="description" content="Turn AI glyph sheets into PNG fonts, then design, animate and export titles.">

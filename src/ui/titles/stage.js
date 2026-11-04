@@ -145,6 +145,15 @@ export function createStage() {
     return { rect, quad: q, list };
   }
 
+  // test hook (guide recorder, smoke tests): a title's outline and handles in page pixels
+  if (window.__pfs) window.__pfs.stageGeom = (id) => {
+    const layer = state.project.layers.find((l) => l.id === (id ?? state.selectedLayerId));
+    const hs = layer && handlesOf(layer);
+    if (!hs) return null;
+    const b = canvas.getBoundingClientRect(), at = ([x, y]) => ({ x: b.left + x, y: b.top + y });
+    return { quad: hs.quad.map(at), handles: Object.fromEntries(hs.list.map((x) => [x.id, at(x.p)])) };
+  };
+
   function layerAt(cx, cy) {
     const layers = state.project.layers;
     for (let i = layers.length - 1; i >= 0; i--) {

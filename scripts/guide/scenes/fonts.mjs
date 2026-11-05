@@ -58,10 +58,12 @@ export default async function fonts(r, page) {
   await r.done(0.6);
 
   r.chapter('Edit a glyph');
-  await r.say('Here’s your new font. Click any glyph to edit it.');
+  await r.say('Here’s your new font. Hover over any glyph to see it large, and click it to edit it.');
   await r.ring('.font-item:has-text("My Bubble")');
   await r.hold(0.8);
   await r.spot(null);
+  await r.move('.sheet .cell[aria-label^="C "]', { dur: 0.8 });
+  await r.hold(1.6);
   await r.click('.sheet .cell[aria-label^="A "]', { dur: 0.8, after: 0.4 });
   await r.done();
   await r.say('Drag the letter to move it up or down, or drag the dotted line to change its spacing.');
@@ -113,21 +115,27 @@ export default async function fonts(r, page) {
   await r.done(0.6);
 
   r.chapter('Colour variants');
-  await r.say('Colour variants recolour the whole font from its own artwork. No new sheets needed.');
+  await r.say('Colour variants recolour the whole font from its own artwork. Each preset shows your letters in its colours.');
   await r.click('button.sec-head:has-text("Colour variants")', { dur: 0.8, after: 0.4 });
-  await r.scrollTo('button.sec-head:has-text("Colour variants")', { dur: 0.6 });
+  await r.scrollTo('section.sec:has(.sec-title:text-is("Colour variants"))', { dur: 0.6 });
   await r.spot('section.sec:has(.sec-title:text-is("Colour variants"))');
   await r.done();
-  await r.say('Pick a preset, or fine-tune the colours, then create the variant.');
-  await r.click('.panel-left .preset:has-text("Gold")', { dur: 0.7, after: 0.8 });
-  await r.click('.panel-left .preset:has-text("Green")', { dur: 0.6, after: 0.8 });
-  await r.scrollTo('button:has-text("Create variant")', { dur: 0.6, offset: 300 });
-  await r.click('button:has-text("Create variant")', { dur: 0.7, after: 0.2 });
+  await r.say('Pick one, and the colour editor opens with the whole font, large.');
+  await r.click('.panel-left .cv-tile:has-text("Gold")', { dur: 0.8, after: 0.2 });
+  await r.spot(null);
+  await r.until(() => !!document.querySelector('.modal-cv .cv-strip canvas'), null, 10);
+  await r.done(0.4);
+  await r.say('Try other presets, or fine-tune the colours. Hover over a letter to see it up close, next to the original.');
+  await r.click('.modal-cv .cv-controls .cv-tile:has-text("Green")', { dur: 0.8, after: 0.6 });
+  await r.click('.modal-cv .cv-controls .cv-tile:has-text("Purple")', { dur: 0.6, after: 0.6 });
+  await r.move('.modal-cv .cv-strip .cv-cell >> nth=6', { dur: 0.8 });
+  await r.done(0.6);
+  await r.say('Then press Create variant, give it a name, and press OK.');
+  await r.ring('.modal-cv .modal-foot .btn-primary', { pad: 6 });
+  await r.click('.modal-cv .modal-foot .btn-primary', { dur: 0.8, after: 0.2 });
   await r.spot(null);
   // the variant is named first (the name of its font and colour is filled in)
   await r.until(() => !!document.querySelector('.modal input.text-input'), null, 5);
-  await r.done(0.1);
-  await r.say('Give it a name, and press OK.');
   await r.spot('.modal', { pad: 6 });
   await r.hold(0.8);
   await r.click('.modal-foot .btn-primary', { dur: 0.8, after: 0.2 });

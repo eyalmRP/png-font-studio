@@ -2,7 +2,7 @@
 import { h, clear, icon, pickFiles, storeGet, storeSet, rafThrottle } from '../dom.js';
 import { t, iso } from '../i18n.js';
 import {
-  section, iconButton, button, numberField, pills, toggle, select, toast, confirmDialog, promptDialog, menu, colorField, gradientField, hexToRgb,
+  section, iconButton, button, numberField, pills, toggle, select, toast, confirmDialog, promptDialog, menu, colorField, gradientField, hexToRgb, modal,
 } from '../controls.js';
 import { state, on, emit, addFont, removeFont, currentFont, fontChanged, checkpoint, setUI } from '../../app/store.js';
 import {
@@ -17,7 +17,7 @@ import { DEFAULT_WARP } from '../../core/warp.js';
 import { drawGlyphOnGuides, css } from './glyphview.js';
 import { openImporter, charFromFilename } from './importer.js';
 import { decodeImage, fontToZip, fontFromZipBytes, saveFile, safeName } from '../../storage/files.js';
-import { FACE_PRESETS, dominantHue, paletteFromStops, resolvePalette, remapPalette } from '../../core/recolor.js';
+import { FACE_PRESETS, dominantHue, paletteFromStops, resolvePalette, remapPalette, colorMemo } from '../../core/recolor.js';
 import { saveFontRecord, deleteFontRecord } from '../../storage/library.js';
 import { drawSample } from '../sample.js';
 import { undoToast } from '../undotoast.js';
@@ -31,6 +31,41 @@ const GROUP_LABEL = { all: 'All', upper: 'Uppercase', lower: 'Lowercase', digits
 
 export function mountFonts({ left, right, center, exportSlot }) {
   const offs = [];
+
+  // ---------- hover zoom: a large view of the glyph under the mouse ----------
+  const zoomCard = h('div.zoom-card', { 'aria-hidden': 'true' });
+  document.body.appendChild(zoomCard);
+  let zoomTimer = 0;
+  const hideZoom = () => { clearTimeout(zoomTimer); zoomCard.classList.remove('on'); };
+  // a glyph just clicked shows no zoom over the editing that follows, until the pointer leaves it (clicking
+  // redraws the sheet, and the new cell under the pointer would open it again)
+  let zoomMuted = null;
+  /** Show a card filled by `fill` beside `anchor` after a short pause, so moving across a grid does not flash it. */
+  const hoverZoom = (anchor, fill, key = anchor) => {
+    anchor.addEventListener('pointerenter', (e) => {
+      if (e.pointerType !== 'mouse' || e.buttons || zoomMuted === key) return;
+      clearTimeout(zoomTimer);
+      zoomTimer = setTimeout(() => {
+        if (!anchor.isConnected) return;
+        clear(zoomCard); fill(zoomCard); zoomCard.classList.add('on');
+        // beside the anchor on the side with room (the reading side first), clear of the window edges
+        const a = anchor.getBoundingClientRect(), z = zoomCard.getBoundingClientRect(), gap = 12;
+        const rtl = getComputedStyle(document.documentElement).direction === 'rtl';
+        const after = a.right + gap, before = a.left - gap - z.width;
+        let x = rtl ? (before >= 8 ? before : after) : (after + z.width <= innerWidth - 8 ? after : before);
+        x = Math.min(innerWidth - z.width - 8, Math.max(8, x));
+        const y = Math.min(innerHeight - z.height - 8, Math.max(8, a.top + a.height / 2 - z.height / 2));
+        zoomCard.style.left = `${x}px`; zoomCard.style.top = `${y}px`;
+      }, 220);
+    });
+    anchor.addEventListener('pointerleave', () => { if (zoomMuted === key) zoomMuted = null; hideZoom(); });
+    anchor.addEventListener('pointerdown', () => { zoomMuted = key; hideZoom(); });
+    anchor.addEventListener('dragstart', hideZoom);
+  };
+  // scrolling moves what the card points at
+  document.addEventListener('scroll', hideZoom, true);
+  offs.push(() => { hideZoom(); zoomCard.remove(); document.removeEventListener('scroll', hideZoom, true); });
+
   let filter = storeGet('glyphFilter', 'all');
   let search = '';
 
@@ -141,59 +176,110 @@ export function mountFonts({ left, right, center, exportSlot }) {
     let faceStops = FACE_PRESETS[0].stops.map((x) => ({ ...x }));
     let presetName = FACE_PRESETS[0].name;
     // a preset recolours the whole design band by band; editing the gradient switches to the face only
-    let palette = FACE_PRESETS[0].palette || paletteFromStops(FACE_PRESETS[0].stops);
+    const paletteOf = (pr) => pr.palette || paletteFromStops(pr.stops);
+    let palette = paletteOf(FACE_PRESETS[0]);
     let resolved = null; // palette measured against the current font and face hue
     const anchorsFor = (f) => {
       const key = `${f.id}:${f.rev}:${face.hue}`;
       if (!resolved || resolved.key !== key || resolved.palette !== palette) resolved = { key, palette, anchors: resolvePalette(f, palette, face.hue) };
       return resolved.anchors;
     };
-    const preview = h('canvas');
-    const hueF = numberField({ label: t('Hue'), min: -180, max: 180, unit: '°', slider: true, value: hue, onInput: (v) => { hue = v; drawPrev(); }, onChange: () => {} });
-    const satF = numberField({ label: t('Saturation'), def: 0, min: -100, max: 100, unit: '%', slider: true, value: sat, onInput: (v) => { sat = v; drawPrev(); }, onChange: () => {} });
-    const lightF = numberField({ label: t('Lightness'), def: 0, min: -100, max: 100, unit: '%', slider: true, value: light, onInput: (v) => { light = v; drawPrev(); }, onChange: () => {} });
-    const grad = gradientField({ stops, onInput: (v) => { stops = v; drawPrev(); }, onChange: (v) => { stops = v; drawPrev(); } });
+    let editor = null; // the open colour editor: { draw }
+    const redraw = rafThrottle(() => { if (editor) editor.draw(); });
+    const hueF = numberField({ label: t('Hue'), min: -180, max: 180, unit: '°', slider: true, value: hue, onInput: (v) => { hue = v; redraw(); }, onChange: () => {} });
+    const satF = numberField({ label: t('Saturation'), def: 0, min: -100, max: 100, unit: '%', slider: true, value: sat, onInput: (v) => { sat = v; redraw(); }, onChange: () => {} });
+    const lightF = numberField({ label: t('Lightness'), def: 0, min: -100, max: 100, unit: '%', slider: true, value: light, onInput: (v) => { light = v; redraw(); }, onChange: () => {} });
+    const grad = gradientField({ stops, onInput: (v) => { stops = v; redraw(); }, onChange: (v) => { stops = v; redraw(); } });
     // face mode controls
-    const faceGrad = gradientField({ stops: faceStops, onInput: (v) => { faceStops = v; presetName = t('Custom'); palette = null; syncFace(); drawPrev(); }, onChange: (v) => { faceStops = v; drawPrev(); } });
-    const presetGrid = h('div.preset-grid', FACE_PRESETS.map((pr) => h('button.preset', {
-      type: 'button', title: t(pr.name),
-      on: { click: (e) => { faceStops = pr.stops.map((x) => ({ ...x })); presetName = t(pr.name); palette = pr.palette || paletteFromStops(pr.stops); faceGrad.setValue(faceStops); for (const b of presetGrid.children) b.classList.toggle('on', b === e.currentTarget); syncFace(); drawPrev(); } },
-    }, h('span', { style: { display: 'block', height: '14px', borderRadius: '4px', background: `linear-gradient(90deg, ${pr.stops.map((x) => x.color).join(', ')})` } }), t(pr.name))));
-    presetGrid.firstChild.classList.add('on');
-    const faceHue = numberField({ label: t('Face colour'), iconName: 'pipette', min: 0, max: 360, unit: '°', slider: true, value: face.hue, title: t('The colour of the letter face to replace'), onInput: (v) => { face.hue = v; swatch(); drawPrev(); }, onChange: () => {} });
-    const faceWidth = numberField({ label: t('Range'), def: 38, min: 5, max: 90, unit: '°', slider: true, value: face.width, title: t('How far from that colour still counts as the face'), onInput: (v) => { face.width = v; drawPrev(); }, onChange: () => {} });
-    const faceSoft = numberField({ label: t('Softness'), def: 30, min: 0, max: 90, unit: '°', slider: true, value: face.soft, onInput: (v) => { face.soft = v; drawPrev(); }, onChange: () => {} });
+    const faceGrad = gradientField({ stops: faceStops, onInput: (v) => { faceStops = v; presetName = t('Custom'); palette = null; syncFace(); syncTiles(); redraw(); }, onChange: (v) => { faceStops = v; redraw(); } });
+
+    // a glyph with its image shrunk to at most maxH pixels and its scale raised to match: the same size in the
+    // font, a fraction of the pixels to recolour (small previews redraw while a slider moves)
+    const small = new Map();
+    const shrunk = (f, ch, maxH) => {
+      const g = f.glyphs.get(ch);
+      if (!g || !g.image || g.image.height <= maxH) return g;
+      const key = `${f.id}:${f.rev}:${g.rev}:${ch}:${maxH}`;
+      if (small.has(key)) return small.get(key);
+      const { width: w0, height: h0 } = g.image, k = maxH / h0, w = Math.max(1, Math.round(w0 * k)), hh = Math.max(1, Math.round(h0 * k));
+      const src = document.createElement('canvas'); src.width = w0; src.height = h0;
+      src.getContext('2d').putImageData(new ImageData(new Uint8ClampedArray(g.image.data), w0, h0), 0, 0);
+      const dst = document.createElement('canvas'); dst.width = w; dst.height = hh;
+      const ctx = dst.getContext('2d', { willReadFrequently: true });
+      ctx.imageSmoothingQuality = 'high'; ctx.drawImage(src, 0, 0, w, hh);
+      const id = ctx.getImageData(0, 0, w, hh), kk = hh / h0;
+      const out = { ...g, image: { width: w, height: hh, data: id.data }, baseline: g.baseline * kk, scale: g.scale / kk, sx: (g.sx || 1) * (w0 * kk) / w };
+      if (small.size > 600) small.clear();
+      small.set(key, out);
+      return out;
+    };
+    // the font drawn through a recolouring (or as it is): a throwaway font holding just the characters needed
+    let nTmp = 0;
+    const withRecolored = (f, chars, fn, draw, maxH = 0) => {
+      if (!fn && !maxH) { draw(f.id); return; }
+      const tmp = createFont('recolour-preview');
+      tmp.metrics = { ...f.metrics }; tmp.spacing = { ...f.spacing };
+      nTmp++;
+      const memo = colorMemo(); // the same colours repeat across glyphs
+      for (const ch of new Set([...chars])) {
+        const g = maxH ? shrunk(f, ch, maxH) : f.glyphs.get(ch);
+        if (g && g.image) tmp.glyphs.set(ch, { ...g, id: `rp${nTmp}:${ch}`, image: fn ? fn(g.image, memo) : g.image });
+      }
+      state.fonts.set(tmp.id, tmp);
+      try { draw(tmp.id); } finally { state.fonts.delete(tmp.id); }
+    };
+    // presets as tiles that show the font in each preset's colours
+    const tileSets = [];
+    const presetTiles = (height, onPick) => {
+      const tiles = FACE_PRESETS.map((pr) => {
+        const c = h('canvas', { 'aria-hidden': 'true' });
+        return { pr, c, b: h('button.cv-tile', { type: 'button', title: t(pr.name), on: { click: () => onPick(pr) } }, c, h('span', t(pr.name))) };
+      });
+      const set = { tiles, height, el: h('div.cv-tiles', tiles.map((x) => x.b)) };
+      tileSets.push(set);
+      return set;
+    };
+    const drawTiles = (set) => {
+      const f = currentFont();
+      if (!f) return;
+      for (const x of set.tiles) {
+        const anchors = resolvePalette(f, paletteOf(x.pr), face.hue);
+        withRecolored(f, 'Abc', (img, memo) => { const o = cloneImage(img); remapPalette(o.data, face.hue, anchors, memo); return o; },
+          (id) => drawSample(x.c, 'Abc', { fontId: id, height: set.height, maxWidth: 150 }), 100);
+      }
+    };
+    const syncTiles = () => { for (const s of tileSets) for (const x of s.tiles) x.b.classList.toggle('on', mode === 'face' && !!palette && t(x.pr.name) === presetName); };
+    const pickPreset = (pr) => {
+      faceStops = pr.stops.map((x) => ({ ...x })); presetName = t(pr.name); palette = paletteOf(pr);
+      faceGrad.setValue(faceStops); syncTiles(); syncFace(); redraw();
+    };
+
+    const faceHue = numberField({ label: t('Face colour'), iconName: 'pipette', min: 0, max: 360, unit: '°', slider: true, value: face.hue, title: t('The colour of the letter face to replace'), onInput: (v) => { face.hue = v; swatch(); redraw(); }, onChange: () => {} });
+    const faceWidth = numberField({ label: t('Range'), def: 38, min: 5, max: 90, unit: '°', slider: true, value: face.width, title: t('How far from that colour still counts as the face'), onInput: (v) => { face.width = v; redraw(); }, onChange: () => {} });
+    const faceSoft = numberField({ label: t('Softness'), def: 30, min: 0, max: 90, unit: '°', slider: true, value: face.soft, onInput: (v) => { face.soft = v; redraw(); }, onChange: () => {} });
     const hueSw = h('span', { style: { width: '22px', height: '22px', borderRadius: '50%', border: '1px solid var(--line-strong)', flex: 'none' } });
     const swatch = () => { hueSw.style.background = `hsl(${face.hue}, 90%, 50%)`; };
-    const detectBtn = button({ label: t('Find face colour'), icon: 'wand', onClick: () => { const f = currentFont(); if (f) { face.hue = dominantHue(f); faceHue.setValue(face.hue); swatch(); drawPrev(); } } });
-    const faceBox = h('div', { style: { display: 'flex', flexDirection: 'column', gap: '10px' } },
-      presetGrid, faceGrad, h('div.row', hueSw, h('div', { style: { flex: 1 } }, faceHue)), faceWidth, faceSoft, detectBtn);
+    const setFaceHue = (v) => { face.hue = v; faceHue.setValue(v); swatch(); };
+    const detectBtn = button({ label: t('Find face colour'), icon: 'wand', onClick: () => { const f = currentFont(); if (f) { setFaceHue(dominantHue(f)); redraw(); } } });
+    const editorTiles = presetTiles(40, pickPreset);
+    const faceBox = h('div.cv-group', h('div.cv-label', t('Presets')), editorTiles.el, faceGrad,
+      h('div.row', hueSw, h('div', { style: { flex: 1 } }, faceHue)), faceWidth, faceSoft, detectBtn);
     // range and softness pick the face for a custom gradient; a preset covers the whole design
     const syncFace = () => { for (const x of [faceWidth, faceSoft]) x.style.display = palette ? 'none' : ''; };
-    const modeP = pills({ class: 'stretch', value: mode, options: [{ value: 'face', label: t('Face'), title: t('Face colour') }, { value: 'hsl', label: t('Hue'), title: t('Shift hue') }, { value: 'map', label: t('Gradient'), title: t('Gradient map') }], onChange: (v) => { mode = v; sync(); drawPrev(); } });
+    const modeP = pills({ class: 'stretch', value: mode, options: [{ value: 'face', label: t('Face'), title: t('Face colour') }, { value: 'hsl', label: t('Hue'), title: t('Shift hue') }, { value: 'map', label: t('Gradient'), title: t('Gradient map') }], onChange: (v) => { mode = v; sync(); syncTiles(); redraw(); } });
     const sync = () => {
       for (const x of [hueF, satF, lightF]) x.style.display = mode === 'hsl' ? '' : 'none';
       grad.style.display = mode === 'map' ? '' : 'none';
       faceBox.style.display = mode === 'face' ? '' : 'none';
     };
-    const recolor = (img) => {
+    const recolor = (img, memo) => {
       const out = cloneImage(img);
-      if (mode === 'face' && palette) remapPalette(out.data, face.hue, anchorsFor(currentFont()));
+      if (mode === 'face' && palette) remapPalette(out.data, face.hue, anchorsFor(currentFont()), memo);
       else if (mode === 'face') recolorRange(out.data, face, faceStops.map((x) => ({ pos: x.pos, color: hexToRgb(x.color) })));
       else if (mode === 'hsl') adjustHsl(out.data, hue, sat / 100, light / 100);
       else gradientMap(out.data, stops.map((x) => ({ pos: x.pos, color: hexToRgb(x.color) })), 1);
       return out;
     };
-    const drawPrev = rafThrottle(() => {
-      const f = currentFont();
-      if (!f) return;
-      const tmp = createFont('preview');
-      tmp.metrics = { ...f.metrics }; tmp.spacing = { ...f.spacing };
-      for (const ch of 'Abc') { const g = f.glyphs.get(ch); if (g && g.image) tmp.glyphs.set(ch, { ...g, id: 'p' + ch, image: recolor(g.image) }); }
-      state.fonts.set(tmp.id, tmp);
-      drawSample(preview, 'Abc', { fontId: tmp.id, height: 40, maxWidth: 200 });
-      state.fonts.delete(tmp.id);
-    });
     const make = async (asNew) => {
       const f = currentFont();
       if (!f) return;
@@ -211,27 +297,85 @@ export function mountFonts({ left, right, center, exportSlot }) {
       if (asNew) { addFont(target); saveFontRecord(target); toast(t('Created {name}', { name: target.name }), 'ok'); }
       else { fontChanged(target); emit('fonts'); }
     };
+
+    // the colour editor: a large preview of the whole font beside the controls
+    const STRIP = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!?&';
+    function openEditor() {
+      const f0 = currentFont();
+      if (!f0 || editor) return;
+      let compare = 'after', tilesHue = null;
+      const big = h('canvas', { 'aria-hidden': 'true' });
+      const stage = h('div.cv-stage', { 'data-bg': storeGet('recolourBg', 'dark') }, big);
+      const strip = h('div.cv-strip');
+      // one cell per character the font has; hovering one shows it large, in the new colours beside the original
+      const cells = [...STRIP].filter((ch) => f0.glyphs.get(ch)?.image).map((ch) => {
+        const c = h('canvas', { 'aria-hidden': 'true' });
+        const cell = h('div.cv-cell', { title: `${ch} · ${charLabel(ch)}` }, c);
+        hoverZoom(cell, (card) => {
+          const f = currentFont();
+          if (!f) return;
+          const now = h('canvas', { 'aria-hidden': 'true' }), was = h('canvas', { 'aria-hidden': 'true' });
+          withRecolored(f, ch, recolor, (id) => drawSample(now, ch, { fontId: id, height: 210, maxWidth: 240 }));
+          drawSample(was, ch, { fontId: f.id, height: 64, maxWidth: 80 });
+          card.append(
+            h('div.zc-pair', h('div.zc-main', { 'data-bg': stage.dataset.bg }, now), h('div.zc-side', h('div.zc-thumb', { 'data-bg': stage.dataset.bg }, was), h('small', t('Original')))),
+            h('div.zc-label', h('b', ch), h('span', charLabel(ch)), h('em', t('New colours'))));
+        });
+        strip.append(cell);
+        return [ch, c];
+      });
+      stage.append(strip);
+      const text = h('input.text-input', { type: 'text', value: storeGet('testText', 'Hello Bubble 123!'), 'aria-label': t('Test text'), placeholder: t('Type to test the font'), on: { input: redraw, keydown: (e) => e.stopPropagation() } });
+      const cmp = pills({ value: compare, options: [{ value: 'before', label: t('Original') }, { value: 'after', label: t('New colours') }], onChange: (v) => { compare = v; redraw(); } });
+      const bgP = pills({ value: stage.dataset.bg, options: [{ value: 'dark', label: t('Dark') }, { value: 'light', label: t('Light') }, { value: 'checker', label: t('Checkerboard') }], onChange: (v) => { stage.dataset.bg = v; storeSet('recolourBg', v); } });
+      const draw = () => {
+        const f = currentFont();
+        if (!f) return;
+        if (tilesHue !== face.hue) { tilesHue = face.hue; drawTiles(editorTiles); }
+        const line = text.value.trim() ? text.value : 'Abc';
+        const fn = compare === 'before' ? null : recolor;
+        withRecolored(f, line, fn, (id) => drawSample(big, line, { fontId: id, height: 120, maxWidth: Math.max(200, stage.clientWidth - 56) }));
+        withRecolored(f, cells.map(([ch]) => ch).join(''), fn, (id) => { for (const [ch, c] of cells) drawSample(c, ch, { fontId: id, height: 44, maxWidth: 58 }); }, 110);
+      };
+      const m = modal({
+        title: `${t('Colour variants')} · ${f0.name}`, iconName: 'palette', class: 'modal-cv',
+        body: [h('div.cv-preview', h('div.cv-bar', text, cmp, bgP), stage), h('div.cv-controls', modeP, faceBox, hueF, satF, lightF, grad)],
+        actions: [
+          button({ label: t('Close'), onClick: () => m.close() }),
+          button({ label: t('Apply to this font'), icon: 'brush', onClick: () => { m.close(); make(false); } }),
+          button({ label: t('Create variant'), icon: 'plus', kind: 'primary', onClick: () => { m.close(); make(true); } }),
+        ],
+        onClose: () => { editor = null; hideZoom(); },
+      });
+      editor = { draw };
+      syncTiles();
+      requestAnimationFrame(draw); // once laid out, so the line fits the stage
+    }
+
     // back to how the panel opens: Face colour with the first preset, measured on the current font
     const resetRecolor = () => {
       mode = 'face'; hue = 160; sat = 0; light = 0;
       stops = MAP_STOPS.map((x) => ({ ...x }));
       const pr = FACE_PRESETS[0];
-      faceStops = pr.stops.map((x) => ({ ...x })); presetName = t(pr.name); palette = pr.palette || paletteFromStops(pr.stops);
+      faceStops = pr.stops.map((x) => ({ ...x })); presetName = t(pr.name); palette = paletteOf(pr);
       const f = currentFont();
       face = { hue: f ? dominantHue(f) : 205, width: 38, soft: 30 };
       modeP.setValue(mode); hueF.setValue(hue); satF.setValue(sat); lightF.setValue(light); grad.setValue(stops); faceGrad.setValue(faceStops);
       faceHue.setValue(face.hue); faceWidth.setValue(face.width); faceSoft.setValue(face.soft);
-      for (const b of presetGrid.children) b.classList.toggle('on', b === presetGrid.firstChild);
-      sync(); swatch(); syncFace(); drawPrev();
+      sync(); swatch(); syncFace(); syncTiles(); drawTiles(panelTiles); redraw();
     };
-    sync(); swatch(); syncFace();
-    offs.push(on('fonts', () => { const f = currentFont(); if (f && f.id !== lastFontId) { lastFontId = f.id; face.hue = dominantHue(f); faceHue.setValue(face.hue); swatch(); } drawPrev(); }));
+    // the panel: the presets on this font, and the way into the editor
+    const panelTiles = presetTiles(30, (pr) => { mode = 'face'; modeP.setValue(mode); sync(); pickPreset(pr); openEditor(); });
+    sync(); swatch(); syncFace(); syncTiles();
     let lastFontId = null;
-    setTimeout(() => { const f = currentFont(); if (f) { lastFontId = f.id; face.hue = dominantHue(f); faceHue.setValue(face.hue); swatch(); } drawPrev(); }, 50);
+    const fontSwitched = () => { const f = currentFont(); if (f && f.id !== lastFontId) { lastFontId = f.id; setFaceHue(dominantHue(f)); } };
+    const redrawTiles = rafThrottle(() => { fontSwitched(); drawTiles(panelTiles); redraw(); });
+    offs.push(on('fonts', redrawTiles));
+    setTimeout(redrawTiles, 50);
     return section({ id: 'fonts-recolor', title: t('Colour variants'), iconName: 'palette', open: false, onReset: resetRecolor },
-      h('p.hint', t('Make a new colour version of the whole font from its artwork, no new sheets needed. A preset recolours the face, rim and 3D depth together; editing the gradient changes only the letter face.')),
-      modeP, faceBox, hueF, satF, lightF, grad, preview,
-      h('div.row-ctl', button({ label: t('Create variant'), icon: 'plus', kind: 'primary', onClick: () => make(true) }), button({ label: t('Apply to this font'), icon: 'brush', onClick: () => make(false) })));
+      h('p.hint', t('Make a new colour version of the whole font from its artwork, no new sheets needed. Pick a look, then fine-tune it in the colour editor.')),
+      panelTiles.el,
+      h('div.row-ctl', button({ label: t('Open colour editor'), icon: 'palette', kind: 'primary', onClick: openEditor })));
   }
 
   // ================= centre: glyph sheet =================
@@ -303,6 +447,7 @@ export function mountFonts({ left, right, center, exportSlot }) {
 
   const renderSheetDebounced = rafThrottle(() => renderSheet());
   function renderSheet() {
+    hideZoom();
     clear(sheet);
     const font = currentFont();
     if (!font) { sheet.appendChild(h('div.empty', { style: { gridColumn: '1 / -1' } }, t('No font selected. Import a sheet to create one.'))); return; }
@@ -338,6 +483,11 @@ export function mountFonts({ left, right, center, exportSlot }) {
           drop: (e) => onCellDrop(e, ch, cell),
         },
       }, canvas, h('div.cell-label', h('b', ch === ' ' ? '␠' : ch), h('span', charLabel(ch).replace('U+', ''))));
+      if (has) hoverZoom(cell, (card) => {
+        const c = h('canvas', { 'aria-hidden': 'true', style: { width: '260px', height: '280px' } });
+        drawGlyphOnGuides(c, font, g, state.ui.guides, { w: 260, h: 280, pad: 18 });
+        card.append(h('div.zc-main.zc-cell', c), h('div.zc-label', h('b', ch === ' ' ? '␠' : ch), h('span', charLabel(ch)), h('em', t('Click to edit'))));
+      }, ch);
       cells.push([canvas, g, ch]);
       grid.appendChild(cell);
     }

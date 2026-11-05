@@ -1,7 +1,7 @@
 {
  "name": "fonts",
  "title": "Make a font",
- "duration": 118.4,
+ "duration": 129.8,
  "chapters": [
   {
    "t": 6.1,
@@ -16,23 +16,23 @@
    "title": "Edit a glyph"
   },
   {
-   "t": 63.3,
+   "t": 65.1,
    "title": "Guides"
   },
   {
-   "t": 72.5,
+   "t": 74.3,
    "title": "Auto-place and even sizes"
   },
   {
-   "t": 83.9,
+   "t": 85.7,
    "title": "Try it out"
   },
   {
-   "t": 87.6,
+   "t": 89.4,
    "title": "Colour variants"
   },
   {
-   "t": 102.1,
+   "t": 113.5,
    "title": "Save and Photoshop"
   }
  ],
@@ -75,62 +75,66 @@
   },
   {
    "t": 47.3,
-   "text": "Here’s your new font. Click any glyph to edit it."
+   "text": "Here’s your new font. Hover over any glyph to see it large, and click it to edit it."
   },
   {
-   "t": 50.3,
+   "t": 52.1,
    "text": "Drag the letter to move it up or down, or drag the dotted line to change its spacing."
   },
   {
-   "t": 55.4,
+   "t": 57.2,
    "text": "The exact numbers are right below: baseline, scale, and the space on each side."
   },
   {
-   "t": 60.5,
+   "t": 62.3,
    "text": "Every change can be undone with Control Z."
   },
   {
-   "t": 63.3,
+   "t": 65.1,
    "text": "Guides show the baseline, cap height, x-height, ascender and descender on every glyph. Turn on the ones you need."
   },
   {
-   "t": 73.3,
+   "t": 75.1,
    "text": "Auto-place all sets every letter on the baseline for you, with the slight overshoot round letters need."
   },
   {
-   "t": 79.4,
+   "t": 81.2,
    "text": "Even out sizes fixes sheets where each letter was stretched to fill its cell."
   },
   {
-   "t": 83.9,
+   "t": 85.7,
    "text": "Type in the sample line to try your font on any words."
   },
   {
-   "t": 87.6,
-   "text": "Colour variants recolour the whole font from its own artwork. No new sheets needed."
+   "t": 89.4,
+   "text": "Colour variants recolour the whole font from its own artwork. Each preset shows your letters in its colours."
   },
   {
-   "t": 92.6,
-   "text": "Pick a preset, or fine-tune the colours, then create the variant."
+   "t": 95.6,
+   "text": "Pick one, and the colour editor opens with the whole font, large."
   },
   {
-   "t": 96.6,
-   "text": "Give it a name, and press OK."
+   "t": 99.8,
+   "text": "Try other presets, or fine-tune the colours. Hover over a letter to see it up close, next to the original."
   },
   {
-   "t": 98.7,
+   "t": 106.6,
+   "text": "Then press Create variant, give it a name, and press OK."
+  },
+  {
+   "t": 110.1,
    "text": "It appears in your list, ready to use in a title."
   },
   {
-   "t": 102.9,
+   "t": 114.3,
    "text": "Save font file keeps a copy you can share, or open on another computer."
   },
   {
-   "t": 107.5,
+   "t": 118.9,
    "text": "Export PSD sends every letter to Photoshop as its own layer. Update from PSD brings your edits back."
   },
   {
-   "t": 114.9,
+   "t": 126.3,
    "text": "Next, let’s design a title with your font."
   }
  ]

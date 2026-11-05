@@ -79,7 +79,7 @@ function fromHcy(h, c, y) {
   return p.map((v) => Math.min(1, Math.max(0, v * c + m)));
 }
 
-/** A face-only preset as a palette: its face colours by brightness, a darker rim, the 3D depth kept. */
+/** A gradient preset as a whole palette: its face colours by brightness, a darker rim, and a 3D depth in its own darkest colour. */
 export function paletteFromStops(st) {
   const sorted = [...st].sort((a, b) => a.pos - b.pos);
   const at = (t) => {
@@ -91,7 +91,14 @@ export function paletteFromStops(st) {
   };
   const face = [[-10, 0.95], [0, 0.85], [10, 0.72], [20, 0.6], [30, 0.5], [40, 0.4]].map(([d, t]) => { const [hue, c, y] = at(t); return { d, hue, c, y }; });
   const [rh, rc] = at(0.15);
-  return [...face, { d: 50, hue: rh, c: rc * 0.8, y: 0.2, g: 1.4 }, { d: 70, keep: true }];
+  // the depth: the darkest colour, deeper, its hue leaning a little toward violet along the way, as in the
+  // reference designs (Orange's depth turns red, Pearl's turns pink)
+  const [dh, dc, dy] = at(0);
+  const toward = ((300 - dh + 540) % 360) - 180, lean = Math.abs(toward) < 10 ? 0 : Math.sign(toward);
+  const base = Math.min(0.34, Math.max(0.18, dy)), dcc = Math.min(0.85, Math.max(0.55, dc));
+  const depth = [[70, 6, 0.9, 1.5], [90, 10, 0.92, 1.5], [100, 14, 0.95, 1.4], [110, 17, 1.15, 1.3], [120, 20, 1.4, 1.2]]
+    .map(([d, rot, ky, g]) => ({ d, hue: (dh + lean * rot + 360) % 360, c: dcc, y: base * ky, g }));
+  return [...face, { d: 50, hue: rh, c: rc * 0.8, y: 0.2, g: 1.4 }, ...depth];
 }
 
 /**
@@ -101,15 +108,46 @@ export function paletteFromStops(st) {
  */
 const bandCache = new WeakMap(); // font → { key, sum }: Orange and Pearl measure the same bands of Bubble Blue
 export function resolvePalette(font, palette, h0 = dominantHue(font)) {
-  const key = `${font.rev}|${h0}|${palette.map((p) => p.d).join(',')}`;
+  // palettes are written for a design whose shading turns one way round the hue circle from the face (Bubble
+  // Blue: blue face, violet rim, pink depth); a design that turns the other way (Bubble Orange: orange face,
+  // red rim, pink depth) reads them mirrored
+  const dir = shadingDirection(font, h0);
+  const pal = dir < 0 ? palette.map((p) => ({ ...p, d: -p.d })) : palette;
+  const key = `${font.rev}|${h0}|${dir}|${palette.map((p) => p.d).join(',')}`;
   const cached = bandCache.get(font);
-  const sum = cached && cached.key === key ? cached.sum : measureBands(font, palette, h0);
+  const sum = cached && cached.key === key ? cached.sum : measureBands(font, pal, h0);
   bandCache.set(font, { key, sum });
-  return palette.map((p, j) => {
+  return pal.map((p, j) => {
     const st = sum[j];
     if (p.keep || !st.n) return { d: p.d, hue: (h0 + p.d + 360) % 360, k: 1, m: 0, y: 0, g: 1, keep: true };
     return { d: p.d, hue: p.hue, k: p.c / (st.c / st.n), m: st.y / st.n, y: p.y, g: p.g ?? 1 };
   });
+}
+
+/** Which way round the hue circle a design's darker colours (rim, 3D depth) lie from its face colour: 1 or −1. */
+const dirCache = new WeakMap();
+export function shadingDirection(font, h0 = dominantHue(font)) {
+  const key = `${font.rev}|${h0}`, c0 = dirCache.get(font);
+  if (c0 && c0.key === key) return c0.dir;
+  let sum = 0;
+  for (const g of font.glyphs.values()) {
+    if (!g.image) continue;
+    const dt = g.image.data;
+    for (let i = 0; i < dt.length; i += 16) {
+      if (dt[i + 3] < 200) continue;
+      const r = dt[i] / 255, gg = dt[i + 1] / 255, b = dt[i + 2] / 255;
+      const mx = Math.max(r, gg, b), c = mx - Math.min(r, gg, b);
+      if (c < 0.15) continue;
+      const y = LUMA[0] * r + LUMA[1] * gg + LUMA[2] * b;
+      if (y > 0.5) continue; // the dark side only
+      const h = ((mx === r ? ((gg - b) / c) % 6 : mx === gg ? (b - r) / c + 2 : (r - gg) / c + 4) * 60 + 360) % 360;
+      const off = ((h - h0 + 540) % 360) - 180;
+      if (Math.abs(off) > 10) sum += Math.sign(off) * (0.5 - y);
+    }
+  }
+  const dir = sum < 0 ? -1 : 1;
+  dirCache.set(font, { key, dir });
+  return dir;
 }
 
 function measureBands(font, palette, h0) {

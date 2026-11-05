@@ -239,13 +239,17 @@ export function mountFonts({ left, right, center, exportSlot }) {
       tileSets.push(set);
       return set;
     };
+    // a short sample the font can show: Abc, or ABC for a capitals-only font, or its first few characters
+    const tileText = (f) => ['Abc', 'ABC', 'abc', '123', 'אבג'].find((x) => [...x].every((ch) => f.glyphs.get(ch)?.image))
+      || [...f.glyphs.keys()].filter((ch) => f.glyphs.get(ch).image && ch.trim()).slice(0, 3).join('');
     const drawTiles = (set) => {
       const f = currentFont();
       if (!f) return;
+      const text = tileText(f);
       for (const x of set.tiles) {
         const anchors = resolvePalette(f, paletteOf(x.pr), face.hue);
-        withRecolored(f, 'Abc', (img, memo) => { const o = cloneImage(img); remapPalette(o.data, face.hue, anchors, memo); return o; },
-          (id) => drawSample(x.c, 'Abc', { fontId: id, height: set.height, maxWidth: 150 }), 100);
+        withRecolored(f, text, (img, memo) => { const o = cloneImage(img); remapPalette(o.data, face.hue, anchors, memo); return o; },
+          (id) => drawSample(x.c, text || ' ', { fontId: id, height: set.height, maxWidth: 150 }), 100);
       }
     };
     const syncTiles = () => { for (const s of tileSets) for (const x of s.tiles) x.b.classList.toggle('on', mode === 'face' && !!palette && t(x.pr.name) === presetName); };

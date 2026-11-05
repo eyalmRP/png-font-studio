@@ -156,7 +156,7 @@ kbd { font: 600 13px Rubik, ui-monospace, monospace; background: var(--kbd); bor
 .prompt { display: grid; gap: 10px; }
 .prompt label { font-size: 14px; font-weight: 600; color: var(--fg-2); display: grid; gap: 6px; }
 .prompt select, .prompt input { font: 15px Rubik, sans-serif; color: var(--fg); background: var(--bg); border: 1px solid var(--line-2); border-radius: 10px; padding: 9px 11px; }
-.prompt textarea { font: 14px/1.55 ui-monospace, 'SF Mono', Menlo, monospace; color: var(--fg); background: var(--bg); border: 1px solid var(--line-2); border-radius: 12px; padding: 12px; min-height: 200px; resize: vertical; width: 100%; }
+.prompt textarea { font: 14px/1.55 ui-monospace, 'SF Mono', Menlo, monospace; color: var(--fg); background: var(--bg); border: 1px solid var(--line-2); border-radius: 12px; padding: 12px; min-height: 340px; resize: vertical; width: 100%; }
 .prompt .row { display: grid; grid-template-columns: 1fr 1.4fr; gap: 10px; }
 @media (max-width: 620px) { .prompt .row { grid-template-columns: 1fr; } }
 
@@ -282,11 +282,11 @@ footer a { color: var(--fg-2); }
           <div class="player" data-video="fonts"><video controls preload="metadata" playsinline poster="media/fonts.jpg" src="media/fonts.mp4" aria-label="Video: make a font"></video></div>
           <div class="card" style="margin-top:16px" id="prompts">
             <h3>Get a glyph sheet: prompt builder</h3>
-            <p style="color:var(--fg-2)">Ask an AI image tool for a sheet of letters in a grid. The importer recognises these layouts and names every cell for you. Describe the look, pick a sheet, and copy the prompt. Results vary by tool: if a letter comes out wrong, generate that sheet again, or fix the cell in the importer.</p>
+            <p style="color:var(--fg-2)">Ask an AI image tool for a sheet of letters in a grid. Attach any image as the style reference (a font sample, a logo, a poster, an illustration or a photo), pick a sheet, and paste the prompt with it. For sheets 2 to 6, attach your finished sheet 1 too, so every sheet matches in style and size. The importer recognises these layouts and names every cell for you. Results vary by tool: if a letter comes out wrong, generate that sheet again, or fix the cell in the importer.</p>
             <div class="prompt">
               <div class="row">
                 <label>Sheet<select id="p-sheet"></select></label>
-                <label>Look<input id="p-style" type="text" value="glossy bubble letters, blue-to-pink gradient, thick white outline, soft 3D depth"></label>
+                <label>Extra direction (optional)<input id="p-style" type="text" placeholder="thicker outline, warmer colours"></label>
               </div>
               <textarea id="p-out" readonly aria-label="Prompt to copy"></textarea>
               <div><button class="btn primary" type="button" id="p-copy">Copy prompt</button></div>
@@ -591,15 +591,21 @@ footer a { color: var(--fg-2); }
   SHEETS.forEach(([n], i) => sel.append(new Option(n, i)));
   const build = () => {
     const [, cols, rows, ref] = SHEETS[+sel.value];
+    const extra = style.value.trim();
     out.value = [
-      `A font glyph sheet: ${style.value.trim() || 'bold display letters'}.`,
-      `Exactly ${cols} columns and ${rows.length} rows of characters in a neat, evenly spaced grid, one character centred in each cell.`,
-      'Every character the same height and sitting on the same baseline, with clear space between cells.',
-      'A plain, flat, single-colour background. No grid lines, no labels, no extra text, nothing touching the cell edges.',
+      'Create a font glyph sheet in the style of the attached reference image.',
+      '',
+      'Style: match the lettering in the reference: letter shapes, stroke weight, colours, gradients, outlines, textures, lighting and depth. If the reference has no lettering, design letters that belong in it, with the same colours, materials and mood. Don’t copy any words, logos or objects from the reference. Draw only the characters listed below.',
+      extra ? `Extra direction: ${extra}` : null,
+      '',
+      `Layout: exactly ${cols} columns and ${rows.length} rows in a neat, evenly spaced grid, one character centred in each cell. Every character is the same height and sits on the same baseline, with clear space around it. Nothing touches the cell edges.`,
+      '',
+      'Background: one flat, plain colour that doesn’t appear in the letters. No grid lines, labels, checkerboard or extra text.',
+      '',
       'Characters, row by row:',
       ...rows.map((r, i) => `Row ${i + 1}: ${r}`),
-      ref ? 'The H in the last row is only a size reference: draw it exactly like the capital H on sheet 1.' : '',
-    ].filter(Boolean).join('\n');
+      ...(ref ? ['', 'The H in the last row is only a size reference. If my capitals sheet is attached too, draw this H exactly like its H, same style and size.'] : []),
+    ].filter((l) => l !== null).join('\n');
   };
   sel.addEventListener('change', build); style.addEventListener('input', build); build();
   document.getElementById('p-copy').addEventListener('click', () => copy(out.value, 'Prompt copied'));

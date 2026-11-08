@@ -1,7 +1,7 @@
 {
  "name": "fonts",
  "title": "Make a font",
- "duration": 129.8,
+ "duration": 139.8,
  "chapters": [
   {
    "t": 6.1,
@@ -32,7 +32,7 @@
    "title": "Colour variants"
   },
   {
-   "t": 113.5,
+   "t": 123.5,
    "title": "Save and Photoshop"
   }
  ],
@@ -115,26 +115,34 @@
   },
   {
    "t": 99.8,
-   "text": "Try other presets, or fine-tune the colours. Hover over a letter to see it up close, next to the original."
+   "text": "Tones turns the letters black and white, then colours their highlights, main tone and shadows. Try other presets."
   },
   {
-   "t": 106.6,
+   "t": 106.8,
+   "text": "Choose where the shadows come from: the preset’s darkest colour, or a deeper shade of the main colour."
+  },
+  {
+   "t": 112.6,
+   "text": "Hover over a letter to see it up close, next to the original."
+  },
+  {
+   "t": 116.7,
    "text": "Then press Create variant, give it a name, and press OK."
   },
   {
-   "t": 110.1,
+   "t": 120.1,
    "text": "It appears in your list, ready to use in a title."
   },
   {
-   "t": 114.3,
+   "t": 124.3,
    "text": "Save font file keeps a copy you can share, or open on another computer."
   },
   {
-   "t": 118.9,
+   "t": 128.9,
    "text": "Export PSD sends every letter to Photoshop as its own layer. Update from PSD brings your edits back."
   },
   {
-   "t": 126.3,
+   "t": 136.3,
    "text": "Next, let’s design a title with your font."
   }
  ]

@@ -196,7 +196,7 @@ export function mountFonts({ left, right, center, exportSlot }) {
     };
     let editor = null; // the open colour editor: { draw }
     const redraw = rafThrottle(() => { if (editor) editor.draw(); });
-    const hueF = numberField({ label: t('Hue'), min: -180, max: 180, unit: '°', slider: true, value: hue, onInput: (v) => { hue = v; redraw(); }, onChange: () => {} });
+    const hueF = numberField({ label: t('Hue'), def: 0, min: -180, max: 180, unit: '°', slider: true, value: hue, onInput: (v) => { hue = v; redraw(); }, onChange: () => {} });
     const satF = numberField({ label: t('Saturation'), def: 0, min: -100, max: 100, unit: '%', slider: true, value: sat, onInput: (v) => { sat = v; redraw(); }, onChange: () => {} });
     const lightF = numberField({ label: t('Lightness'), def: 0, min: -100, max: 100, unit: '%', slider: true, value: light, onInput: (v) => { light = v; redraw(); }, onChange: () => {} });
     const grad = gradientField({ stops, onInput: (v) => { stops = v; redraw(); }, onChange: (v) => { stops = v; redraw(); } });
@@ -290,17 +290,19 @@ export function mountFonts({ left, right, center, exportSlot }) {
     // the tiles show each preset the way the current mode would apply it
     const retile = rafThrottle(() => { drawTiles(panelTiles); if (editor) drawTiles(editorTiles); });
 
-    const faceHue = numberField({ label: t('Face colour'), iconName: 'pipette', min: 0, max: 360, unit: '°', slider: true, value: face.hue, title: t('The colour of the letter face to replace'), onInput: (v) => { face.hue = v; swatch(); redraw(); }, onChange: () => {} });
+    const faceHue = numberField({ label: t('Face colour'), iconName: 'pipette', class: 'hue-track', min: 0, max: 360, unit: '°', slider: true, value: face.hue, title: t('The colour of the letter face to replace'), onInput: (v) => { face.hue = v; swatch(); redraw(); }, onChange: () => {} });
     const faceWidth = numberField({ label: t('Range'), def: 38, min: 5, max: 90, unit: '°', slider: true, value: face.width, title: t('How far from that colour still counts as the face'), onInput: (v) => { face.width = v; redraw(); }, onChange: () => {} });
     const faceSoft = numberField({ label: t('Softness'), def: 30, min: 0, max: 90, unit: '°', slider: true, value: face.soft, onInput: (v) => { face.soft = v; redraw(); }, onChange: () => {} });
-    const hueSw = h('span', { style: { width: '22px', height: '22px', borderRadius: '50%', border: '1px solid var(--line-strong)', flex: 'none' } });
-    const swatch = () => { hueSw.style.background = `hsl(${face.hue}, 90%, 50%)`; };
+    // the slider shows the colour wheel and its thumb the face colour
+    const swatch = () => { faceHue.style.setProperty('--thumb', `hsl(${face.hue}, 90%, 50%)`); };
     const setFaceHue = (v) => { face.hue = v; faceHue.setValue(v); swatch(); };
     const detectBtn = button({ label: t('Find face colour'), icon: 'wand', onClick: () => { const f = currentFont(); if (f) { setFaceHue(dominantHue(f)); redraw(); } } });
     const editorTiles = presetTiles(30, pickPreset);
     const presetsBox = h('div.cv-group', h('div.cv-label', t('Presets')), editorTiles.el);
-    const faceBox = h('div.cv-group', faceGrad,
-      h('div.row', hueSw, h('div', { style: { flex: 1 } }, faceHue)), faceWidth, faceSoft, detectBtn);
+    const faceBox = h('div.cv-group', h('div.cv-label', t('Gradient')), faceGrad,
+      h('div.cv-label', t('Letter face')), faceHue, faceWidth, faceSoft, detectBtn);
+    const hslBox = h('div.cv-group', h('div.cv-label', t('Shift hue')), hueF, satF, lightF);
+    const mapBox = h('div.cv-group', h('div.cv-label', t('Gradient map')), grad);
     // tones: the three colours, where the shadows come from, the balance between them, and the shine
     const setTones = (patch, custom = true) => {
       Object.assign(tones, patch);
@@ -326,8 +328,8 @@ export function mountFonts({ left, right, center, exportSlot }) {
       if ((was === 'face') !== (v === 'face')) retile();
     } });
     const sync = () => {
-      for (const x of [hueF, satF, lightF]) x.style.display = mode === 'hsl' ? '' : 'none';
-      grad.style.display = mode === 'map' ? '' : 'none';
+      hslBox.style.display = mode === 'hsl' ? '' : 'none';
+      mapBox.style.display = mode === 'map' ? '' : 'none';
       faceBox.style.display = mode === 'face' ? '' : 'none';
       toneBox.style.display = mode === 'tones' ? '' : 'none';
       presetsBox.style.display = mode === 'tones' || mode === 'face' ? '' : 'none';
@@ -401,7 +403,7 @@ export function mountFonts({ left, right, center, exportSlot }) {
       };
       const m = modal({
         title: `${t('Colour variants')} · ${f0.name}`, iconName: 'palette', class: 'modal-cv',
-        body: [h('div.cv-preview', h('div.cv-bar', text, cmp, bgP), stage), h('div.cv-controls', modeP, presetsBox, toneBox, faceBox, hueF, satF, lightF, grad)],
+        body: [h('div.cv-preview', h('div.cv-bar', text, cmp, bgP), stage), h('div.cv-controls', modeP, presetsBox, toneBox, faceBox, hslBox, mapBox)],
         actions: [
           button({ label: t('Close'), onClick: () => m.close() }),
           button({ label: t('Apply to this font'), icon: 'brush', onClick: () => { m.close(); make(false); } }),

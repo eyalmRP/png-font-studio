@@ -43,7 +43,7 @@ export function createPlayer() {
     onInput: (v) => { checkpoint('project', 'Hold time', 'hold'); state.project.hold = v; refresh(); emit('project', { what: 'timing' }); }, onChange: () => {},
   });
   hold.classList.add('player-hold');
-  const el = h('section.player', { 'aria-label': t('Animation player') }, startBtn, playBtn, scrub, timeLabel, hold, loopT);
+  const el = h('section.player', { dir: 'ltr', 'aria-label': t('Animation player') }, startBtn, playBtn, scrub, timeLabel, hold, loopT);
   let raf = null, last = 0;
 
   function refresh() {

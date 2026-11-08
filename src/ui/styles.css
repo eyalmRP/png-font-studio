@@ -163,7 +163,8 @@ button { cursor: pointer; }
 .nf-box:focus-within { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
 .nf-input { width: 100%; min-width: 0; border: 0; background: transparent; padding: 0 22px 0 8px; height: 100%; font-family: var(--font-num); font-variant-numeric: tabular-nums; cursor: ew-resize; touch-action: pan-y; }
 .nf-input:focus { outline: none; cursor: text; }
-[dir="rtl"] .nf-input { padding: 0 8px 0 22px; }
+/* :dir() follows the dir attributes, so a left-to-right bar (the player) inside the Hebrew UI keeps its boxes left to right */
+.nf-box:dir(rtl) > .nf-input { padding: 0 8px 0 22px; text-align: right; }
 .nf-unit { position: absolute; inset-inline-end: 20px; color: var(--muted); font-size: 11px; pointer-events: none; }
 .nf-spins { position: absolute; inset-inline-end: 2px; top: 2px; bottom: 2px; display: flex; flex-direction: column; width: 16px; }
 .nf-spin { flex: 1; border: 0; background: transparent; color: var(--muted); padding: 0; display: flex; align-items: center; justify-content: center; border-radius: 3px; }
@@ -171,6 +172,12 @@ button { cursor: pointer; }
 .nf.mixed .nf-input::placeholder { color: var(--muted); }
 .nf.scrubbing .nf-box { border-color: var(--accent); }
 .nf-slider { width: 100%; margin: 0; }
+/* a hue slider shows the colour wheel, and its thumb the picked colour (--thumb) */
+.nf.hue-track .nf-slider::-webkit-slider-runnable-track { background: linear-gradient(var(--fill-dir), #f00, #ff0 16.7%, #0f0 33.3%, #0ff 50%, #00f 66.7%, #f0f 83.3%, #f00); }
+.nf.hue-track .nf-slider::-moz-range-track { background: linear-gradient(to right, #f00, #ff0 16.7%, #0f0 33.3%, #0ff 50%, #00f 66.7%, #f0f 83.3%, #f00); }
+.nf.hue-track .nf-slider::-moz-range-progress { background: transparent; }
+.nf.hue-track .nf-slider::-webkit-slider-thumb { background: var(--thumb, #fff); border-color: #fff; box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.35), 0 1px 3px rgba(0, 0, 0, 0.3); }
+.nf.hue-track .nf-slider::-moz-range-thumb { background: var(--thumb, #fff); border-color: #fff; }
 /* sliders in the theme: accent up to the value, a quiet track after it (--fill comes from rangeFill) */
 .nf-slider, .player-scrub { -webkit-appearance: none; appearance: none; height: 18px; background: transparent; cursor: pointer; --fill: 0%; --fill-dir: to right; }
 [dir="rtl"] .nf-slider { --fill-dir: to left; }
@@ -206,12 +213,18 @@ button { cursor: pointer; }
 .cf-label { color: var(--muted); font-size: 12px; }
 .cf-swatch { position: relative; width: 28px; height: 28px; border-radius: var(--r-sm); border: 1px solid var(--line-strong); overflow: hidden; flex: none; }
 .cf-picker { position: absolute; inset: -8px; width: 48px; height: 48px; opacity: 0; cursor: pointer; border: 0; padding: 0; }
-.cf-hex { width: 84px; height: 28px; border-radius: var(--r-sm); border: 1px solid transparent; background: var(--field); padding: 0 8px; font-family: var(--font-num); font-size: 12px; }
+.cf-hex { width: 84px; text-align: start; height: 28px; border-radius: var(--r-sm); border: 1px solid transparent; background: var(--field); padding: 0 8px; font-family: var(--font-num); font-size: 12px; }
 
+/* one label column in every stack of fields, so the boxes line up (labels that run longer wrap) */
+:root { --label-w: 104px; }
+:is(.sec-body, .fx-body, .cv-group) > :is(.nf, .ang) .nf-label:has(> span),
+:is(.sec-body, .fx-body, .cv-group) > .cf > .cf-label { flex: 0 0 var(--label-w); width: var(--label-w); white-space: normal; line-height: 1.2; }
+:is(.sec-body, .fx-body, .cv-group, .gf) > .cf > .cf-hex { flex: 1; width: auto; min-width: 0; }
+.cf:dir(rtl) > .cf-hex { text-align: right; }
 .gf { display: flex; flex-direction: column; gap: 8px; }
-.gf-track { position: relative; padding-bottom: 16px; }
+.gf-track { position: relative; padding: 0 10px 16px; }
 .gf-bar { height: 20px; border-radius: 6px; border: 1px solid var(--line-strong); cursor: copy; }
-.gf-stops { position: absolute; left: 0; right: 0; top: 12px; height: 20px; pointer-events: none; }
+.gf-stops { position: absolute; left: 10px; right: 10px; top: 12px; height: 20px; pointer-events: none; }
 .gf-stop { pointer-events: auto; position: absolute; width: 20px; height: 20px; margin-left: -10px; border-radius: 50%; padding: 3px; border: 0; background: var(--panel-2); box-shadow: 0 0 0 1px var(--line-strong), 0 1px 3px rgba(0, 0, 0, 0.25); cursor: grab; display: grid; }
 .gf-dot { display: block; border-radius: 50%; width: 100%; height: 100%; box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.12); }
 .gf-stop.on { box-shadow: 0 0 0 2px var(--accent), 0 1px 3px rgba(0, 0, 0, 0.25); }
@@ -241,6 +254,8 @@ button { cursor: pointer; }
 .row-ctl { flex: 1; display: flex; gap: 6px; align-items: center; min-width: 0; flex-wrap: wrap; }
 .hint { color: var(--muted); font-size: 12px; line-height: 1.45; margin: 0; }
 .hint b { color: var(--fg-2); font-weight: 600; }
+.hint-ok { display: flex; gap: 6px; align-items: flex-start; }
+.hint-ok > svg { flex: none; margin-top: 1px; color: var(--ok); }
 .empty { padding: 24px 16px; color: var(--muted); text-align: center; line-height: 1.5; }
 .divider { height: 1px; background: var(--line); margin: 4px 0; }
 .kbd { font-family: var(--font-num); font-size: 11px; padding: 1px 6px; min-width: 20px; text-align: center; border-radius: 4px; background: var(--field); color: var(--fg); border: 1px solid var(--line-strong); border-bottom-width: 2px; }
@@ -471,7 +486,7 @@ button { cursor: pointer; }
   .nf-slider::-webkit-slider-thumb, .player-scrub::-webkit-slider-thumb { width: 22px; height: 22px; margin-top: -9px; }
   .nf-slider::-moz-range-thumb, .player-scrub::-moz-range-thumb { width: 18px; height: 18px; }
   .nf-spins { display: none; }
-  .nf-input, [dir="rtl"] .nf-input { padding: 0 8px; }
+  .nf-input, .nf-box:dir(rtl) > .nf-input { padding: 0 8px; }
   .nf-unit { inset-inline-end: 8px; }
   .sec-head { padding-block: 12px; }
   .menu-item { padding-block: 11px; }
@@ -534,6 +549,9 @@ button { cursor: pointer; }
 .cv-tile canvas { max-width: 100%; }
 .cv-group { display: flex; flex-direction: column; gap: 10px; }
 .cv-label { font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+.cv-group > .cv-label:not(:first-child) { margin-top: 6px; }
+.btn-col { display: flex; flex-direction: column; gap: 6px; }
+.btn-col > .btn { justify-content: center; }
 .modal.modal-cv { width: min(1320px, 100%); height: min(880px, calc(100% - 16px)); }
 .modal-cv .modal-body { flex-direction: row; gap: 0; padding: 0; flex: 1; }
 .cv-preview { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 10px; padding: 16px 18px; }

@@ -44,7 +44,8 @@ export function numberField(o) {
   const sMin = o.sliderMin ?? (Number.isFinite(min) ? min : 0), sMax = o.sliderMax ?? (Number.isFinite(max) ? max : 100);
   let value = o.value;
   // iOS's decimal keypad has no minus key, so fields that go negative get the full keyboard
-  const input = h('input.nf-input', { type: 'text', inputMode: min < 0 ? 'text' : 'decimal', spellcheck: false, 'aria-label': label || title || '' });
+  // numbers read left to right in Hebrew too, so a minus sign stays in front
+  const input = h('input.nf-input', { type: 'text', dir: 'ltr', inputMode: min < 0 ? 'text' : 'decimal', spellcheck: false, 'aria-label': label || title || '' });
   const up = h('button.nf-spin.nf-up', { type: 'button', tabIndex: -1, title: t('Increase') }, icon('chevronUp', 11));
   const down = h('button.nf-spin.nf-down', { type: 'button', tabIndex: -1, title: t('Decrease') }, icon('chevronDown', 11));
   const hasDef = o.def !== undefined && o.def !== null;
@@ -178,7 +179,9 @@ export function angleField(o) {
       nf.setValue(value); draw(); o.onChange && o.onChange(value);
     }
   });
-  const el = h('div.ang', dial, nf);
+  // the dial follows the box, so the label lines up with the fields above and below
+  nf.querySelector('.nf-row').append(dial);
+  const el = h('div.ang', nf);
   el.setValue = (v) => { value = v; nf.setValue(v); draw(); };
   draw();
   return el;
@@ -298,7 +301,7 @@ export function colorField(o) {
   let value = normHex(o.value) || '#ffffff';
   const picker = h('input.cf-picker', { type: 'color', value, tabIndex: -1, 'aria-label': o.label || t('Colour') });
   const sw = h('span.cf-swatch', picker);
-  const text = h('input.cf-hex', { type: 'text', value, spellcheck: false, maxLength: 7, 'aria-label': (o.label || t('Colour')) + ' hex' });
+  const text = h('input.cf-hex', { type: 'text', dir: 'ltr', value, spellcheck: false, maxLength: 7, 'aria-label': (o.label || t('Colour')) + ' hex' });
   const el = h('div.cf', o.label ? h('span.cf-label', o.label) : null, sw, text);
   // the hex box always shows the colour (typing in it fires nothing until Enter or leaving it)
   const render = () => { sw.style.background = value; picker.value = value; text.value = value; };

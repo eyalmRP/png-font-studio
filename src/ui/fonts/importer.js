@@ -347,7 +347,7 @@ export async function openImporter(initialFiles) {
         renderAll();
       } });
       side.appendChild(section({ id: 'imp-map', title: t('Characters'), iconName: 'letters' },
-        it.recog ? h('p.hint', icon('check', 14), ' ', t('Recognised as {name} by comparing shapes with {font}.', { name: t(it.recog.name), font: it.recog.from })) : null,
+        it.recog ? h('p.hint.hint-ok', icon('check', 14), h('span', t('Recognised as {name} by comparing shapes with {font}.', { name: t(it.recog.name), font: it.recog.from }))) : null,
         refIndexOf(it) >= 0 ? h('p.hint', t('The H marked “size reference” is not imported. It matches this sheet’s size to your capitals.')) : null,
         preset, recogBtn,
         h('label.field', h('span', t('Characters in reading order (\\s skips a cell)')), mappingInput)));

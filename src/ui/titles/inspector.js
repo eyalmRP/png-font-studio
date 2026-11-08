@@ -420,7 +420,8 @@ export function createInspector() {
     const nf = (key, o, what) => { const f = numberField({ ...o, value: layer[key], onInput: (v) => setL({ [key]: v }, 'layer:' + key, what), onChange: (v) => setL({ [key]: v }, 'layer:' + key, what) }); reg(() => f.setValue(layer[key])); return f; };
     const name = h('input.text-input', { type: 'text', value: layer.name, 'aria-label': t('Layer name'), on: { change: (e) => setL({ name: e.target.value, autoName: false }, null, 'render'), keydown: (e) => e.stopPropagation() } });
     const ab = state.project.artboard;
-    const alignBtns = h('div.row-ctl',
+    const alignBtns = h('div.btn-col',
+      button({ label: t('Flip horizontally'), icon: 'flipH', onClick: () => setL({ scaleX: -layer.scaleX }, null) }),
       button({ label: t('Centre horizontally'), icon: 'arrowsH', onClick: () => centerLayer(layer, 'x') }),
       button({ label: t('Centre vertically'), icon: 'arrowsV', onClick: () => centerLayer(layer, 'y') }));
     let link = true;
@@ -437,7 +438,6 @@ export function createInspector() {
       h('div.grid2', nf('x', { label: 'X', min: -100000, max: 100000, unit: 'px' }), nf('y', { label: 'Y', min: -100000, max: 100000, unit: 'px' })),
       h('div.row', h('div.grid2', { style: { flex: 1 } }, sx, sy), linkBtn),
       rot,
-      button({ label: t('Flip horizontally'), icon: 'flipH', onClick: () => setL({ scaleX: -layer.scaleX }, null) }),
       alignBtns));
     const blend = select({ label: t('Blend mode'), iconName: 'blend', value: layer.blend, options: BLEND_MODES.map((b) => ({ value: b, label: t(blendName(b)) })), onChange: (v) => setL({ blend: v }, null, 'render') });
     body.appendChild(section({ id: 'ly-look', title: t('Appearance'), iconName: 'droplet', onReset: () => { setL({ opacity: 100, blend: 'normal' }, null, 'render'); build(); } },

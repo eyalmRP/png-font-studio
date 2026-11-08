@@ -790,4 +790,5 @@ export const HE = {
   'The shadows are a deeper shade of the main colour': 'הצללים הם גוון עמוק יותר של הצבע הראשי',
   'The shadows take the darkest colour of the preset': 'הצללים מקבלים את הצבע הכהה ביותר של הערכה',
   'Tones': 'גוונים',
+  'Letter face': 'פני האות',
 };

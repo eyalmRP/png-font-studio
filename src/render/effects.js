@@ -1,4 +1,5 @@
 // Layer effects on a premultiplied canvas: Photoshop-style layer styles plus Office-style extras.
+import { stopCss } from '../core/gradients.js';
 import { EFFECTS, effectMargin } from '../core/effects-def.js';
 import { distanceOutside, distanceInside, boxBlur, bevelShade, smoothstep, nearestSeedValue } from '../core/fx.js';
 import { adjustHsl } from '../core/image.js';
@@ -97,7 +98,7 @@ function gradientStyle(ctx, stops, angle, box, kind = 'linear', scale = 100) {
     const half = ((Math.abs(dx) * box.w + Math.abs(dy) * box.h) / 2) * (scale / 100);
     g = ctx.createLinearGradient(cx - dx * half, cy - dy * half, cx + dx * half, cy + dy * half);
   }
-  for (const s of [...stops].sort((p, q) => p.pos - q.pos)) g.addColorStop(Math.min(1, Math.max(0, s.pos)), s.color);
+  for (const s of [...stops].sort((p, q) => p.pos - q.pos)) g.addColorStop(Math.min(1, Math.max(0, s.pos)), stopCss(s));
   return g;
 }
 

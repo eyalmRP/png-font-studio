@@ -1,7 +1,8 @@
 // The artboard stage: zoom/pan, layer selection and transform handles, text tool, and on-canvas text editing.
 import { h, icon, rafThrottle, storeGet, storeSet } from '../dom.js';
 import { t } from '../i18n.js';
-import { iconButton, menu } from '../controls.js';
+import { iconButton, menu, contextMenu, toast } from '../controls.js';
+import { layerMenuItems } from './commands.js';
 import { state, on, emit, selectedLayer, selectLayer, checkpoint, projectChanged, newTextLayer, markLayer, getFont } from '../../app/store.js';
 import { drawLayers, renderLayer, layerMatrix, getLayout, warpPoint, unwarpPoint, layerVisibleAt } from '../../render/layer.js';
 import { caretAt, hitTest, selectionRects, moveVertical, moveHorizontal, lineStartEnd } from '../../core/layout.js';
@@ -380,6 +381,7 @@ export function createStage() {
   }
 
   canvas.addEventListener('pointerdown', (ev) => {
+    if (ev.button === 2) return; // a right-click opens the menu (contextmenu below) and leaves the selection as it is
     const r = canvas.getBoundingClientRect();
     const cx = ev.clientX - r.left, cy = ev.clientY - r.top;
     canvas.setPointerCapture(ev.pointerId);
@@ -556,6 +558,57 @@ export function createStage() {
   }, { passive: false });
 
   canvas.addEventListener('dblclick', (ev) => ev.preventDefault());
+
+  // ---------- right-click ----------
+  const copyText = (text) => {
+    try { navigator.clipboard.writeText(text).catch(() => toast(t('Press Ctrl+C to copy'))); } catch { toast(t('Press Ctrl+C to copy')); }
+  };
+  const pasteText = () => {
+    const nope = () => { toast(t('Press Ctrl+V to paste')); focusIme(); };
+    try { navigator.clipboard.readText().then((txt) => { if (txt) typeText(txt.replace(/\r\n?/g, '\n')); focusIme(); }, nope); } catch { nope(); }
+  };
+  canvas.addEventListener('contextmenu', (ev) => {
+    const r = canvas.getBoundingClientRect();
+    const cx = ev.clientX - r.left, cy = ev.clientY - r.top;
+    const sel = selectedLayer(), hit = view.tool !== 'hand' ? layerAt(cx, cy) : null;
+    // in the text being typed: the clipboard, letter size and done
+    if (state.edit && sel && state.edit.layerId === sel.id && hit === sel) {
+      const has = !!selectedText();
+      const size = (k) => { const cs = currentCharStyle(sel); setChar({ size: Math.max(4, Math.round((cs.size || 100) * k)) }); focusIme(); };
+      contextMenu(ev, [
+        { label: t('Cut'), icon: 'scissors', hint: 'Ctrl+X', disabled: !has, onClick: () => { copyText(selectedText()); deleteText(1); focusIme(); } },
+        { label: t('Copy'), icon: 'copy', hint: 'Ctrl+C', disabled: !has, onClick: () => { copyText(selectedText()); focusIme(); } },
+        { label: t('Paste'), icon: 'paste', hint: 'Ctrl+V', onClick: pasteText },
+        { label: t('Select all'), icon: 'selectAll', hint: 'Ctrl+A', onClick: () => { selectAll(); focusIme(); } },
+        '-',
+        { label: t('Bigger letters'), icon: 'plus', hint: 'Ctrl+Shift+>', onClick: () => size(1.1) },
+        { label: t('Smaller letters'), icon: 'minus', hint: 'Ctrl+Shift+<', onClick: () => size(1 / 1.1) },
+        '-',
+        { label: t('Done typing'), icon: 'check', hint: 'Esc', onClick: () => exitEdit() },
+      ]);
+      return;
+    }
+    // on a title: select it, then its commands
+    if (hit) {
+      if (state.edit && state.edit.layerId !== hit.id) exitEdit();
+      if (sel !== hit) selectLayer(hit.id);
+      contextMenu(ev, layerMenuItems(hit));
+      return;
+    }
+    // on the empty stage: add a title there, the view
+    const p = toArtboard(cx, cy);
+    contextMenu(ev, [
+      { label: t('Add a title here'), icon: 'textCursor', onClick: () => { if (state.edit) exitEdit(); addTextAt(p.x, p.y); } },
+      '-',
+      { label: t('Zoom in'), icon: 'zoomIn', hint: 'Ctrl++', onClick: () => zoomBy(1.25, cx, cy) },
+      { label: t('Zoom out'), icon: 'zoomOut', hint: 'Ctrl+−', onClick: () => zoomBy(0.8, cx, cy) },
+      { label: t('Fit artboard'), icon: 'fit', hint: 'Ctrl+0', onClick: () => fit() },
+      '-',
+      { label: t('Show text guides while editing'), checked: view.guides, onClick: () => guidesBtn.click() },
+      { label: t('Title-safe guides'), checked: !!state.project.artboard.safe, onClick: () => safeBtn.click() },
+      { label: t('Preview background…'), icon: 'palette', onClick: () => bgMenu({ x: ev.clientX, y: ev.clientY }) },
+    ]);
+  });
 
   function addTextAt(x, y) {
     checkpoint('project', 'Add title');

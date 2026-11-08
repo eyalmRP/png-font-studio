@@ -1,7 +1,7 @@
 // Right-hand inspector for titles: character, paragraph, effects, warp, animation and layer tabs.
 import { h, clear, icon, storeSet } from '../dom.js';
 import { t } from '../i18n.js';
-import { numberField, angleField, pills, toggle, section, tabs, select, button, iconButton, colorField, gradientField, menu } from '../controls.js';
+import { numberField, angleField, pills, toggle, section, tabs, select, button, iconButton, colorField, gradientField, menu, contextMenu } from '../controls.js';
 import { state, on, emit, selectedLayer, checkpoint, projectChanged, newEffect, getFont } from '../../app/store.js';
 import { currentCharStyle, currentParaStyle, setChar, setPara, kernIndex, setPairKern, setLayerText, enterEdit } from '../../app/textedit.js';
 import { EFFECTS, EFFECT_ORDER, BLEND_MODES, STYLE_PRESETS } from '../../core/effects-def.js';
@@ -10,6 +10,7 @@ import { IN_PRESETS, OUT_PRESETS, LOOP_PRESETS, ORDERS, DEFAULT_ANIM } from '../
 import { DEFAULT_CHAR, DEFAULT_PARA } from '../../core/textdoc.js';
 import { drawSample } from '../sample.js';
 import { undoToast } from '../undotoast.js';
+import { centerLayer } from './commands.js';
 
 export const LABELS = {
   // effects
@@ -316,7 +317,19 @@ export function createInspector() {
     const del = iconButton('trash', t('Delete'), () => { checkpoint('project', 'Delete effect'); layer.effects.splice(i, 1); projectChanged('render', layer); build(); undoToast(t('Removed {name}', { name: L(fx.type) })); });
     const rst = iconButton('rotateCcw', t('Reset to default'), () => { checkpoint('project', 'Reset effect'); Object.assign(fx, JSON.parse(JSON.stringify(def.defaults))); projectChanged('render', layer); build(); });
     function move(d) { checkpoint('project', 'Reorder effects'); const [x] = layer.effects.splice(i, 1); layer.effects.splice(i + d, 0, x); projectChanged('render', layer); build(); }
-    const card = h('div.fx-item', { class: fx.enabled ? '' : 'off' }, h('div.fx-head', nameBtn, vis, up, down, rst, dup, del), bodyEl);
+    const head = h('div.fx-head', nameBtn, vis, up, down, rst, dup, del);
+    // right-click the effect's header: the same commands as its buttons
+    head.addEventListener('contextmenu', (e) => contextMenu(e, [
+      { label: fx.enabled ? t('Hide') : t('Show'), icon: fx.enabled ? 'eyeOff' : 'eye', onClick: () => vis.click() },
+      { label: t('Move up'), icon: 'chevronUp', disabled: up.disabled, onClick: () => up.click() },
+      { label: t('Move down'), icon: 'chevronDown', disabled: down.disabled, onClick: () => down.click() },
+      '-',
+      { label: t('Duplicate'), icon: 'copy', onClick: () => dup.click() },
+      { label: t('Reset to default'), icon: 'rotateCcw', onClick: () => rst.click() },
+      '-',
+      { label: t('Delete'), icon: 'trash', danger: true, onClick: () => del.click() },
+    ]));
+    const card = h('div.fx-item', { class: fx.enabled ? '' : 'off' }, head, bodyEl);
     bodyEl.hidden = !open;
     const set = (k, v, live) => { checkpoint('project', 'Edit effect', 'fx:' + fx.id + k); fx[k] = v; projectChanged('render', layer); if (!live) refresh(); };
     paramControls(def.params, fx, set, bodyEl, reg, def.defaults);
@@ -434,16 +447,6 @@ export function createInspector() {
     void ab;
   }
 
-  function centerLayer(layer, axis) {
-    checkpoint('project', 'Align');
-    const ab = state.project.artboard;
-    const r = renderStateRect(layer);
-    if (!r) return;
-    if (axis === 'x') layer.x += ab.w / 2 - (r.x + r.w / 2);
-    else layer.y += ab.h / 2 - (r.y + r.h / 2);
-    projectChanged('transform', layer);
-  }
-
   const offs = [
     on('selection', () => refresh()), on('project', (d) => { if (d && (d.what === 'mode' || d.what === 'layout')) syncTabs(); refresh(); }), on('edit', () => refresh()), on('fonts', () => build()), on('font', () => refresh()),
   ];
@@ -452,16 +455,8 @@ export function createInspector() {
 }
 
 // helpers resolved lazily to avoid an import cycle with the stage
-import { getLayout, renderLayer, layerMatrix } from '../../render/layer.js';
+import { getLayout } from '../../render/layer.js';
 function renderStateLayoutWidth(layer) { return getLayout(layer).width + 40; }
-function renderStateRect(layer) {
-  const r = renderLayer(layer, state.time, 1);
-  if (!r) return null;
-  const M = layerMatrix(layer), rc = r.contentRect;
-  const pts = [[rc.x, rc.y], [rc.x + rc.w, rc.y], [rc.x, rc.y + rc.h], [rc.x + rc.w, rc.y + rc.h]].map(([x, y]) => M.transformPoint(new DOMPoint(x, y)));
-  const xs = pts.map((p) => p.x), ys = pts.map((p) => p.y);
-  return { x: Math.min(...xs), y: Math.min(...ys), w: Math.max(...xs) - Math.min(...xs), h: Math.max(...ys) - Math.min(...ys) };
-}
 
 export function blendName(b) {
   return { normal: 'Normal', multiply: 'Multiply', screen: 'Screen', overlay: 'Overlay', darken: 'Darken', lighten: 'Lighten', 'color-dodge': 'Colour dodge', 'color-burn': 'Colour burn', 'hard-light': 'Hard light', 'soft-light': 'Soft light', difference: 'Difference', exclusion: 'Exclusion', hue: 'Hue', saturation: 'Saturation', color: 'Colour', luminosity: 'Luminosity' }[b] || b;

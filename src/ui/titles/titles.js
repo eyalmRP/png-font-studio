@@ -1,7 +1,8 @@
 // Titles mode: layers + artboard (left), stage + animation player (centre), inspector (right).
 import { h, clear, icon, storeSet } from '../dom.js';
 import { t, ltr, iso } from '../i18n.js';
-import { section, iconButton, button, numberField, pills, colorField, select, menu } from '../controls.js';
+import { section, iconButton, button, numberField, pills, colorField, select, menu, contextMenu } from '../controls.js';
+import { duplicateLayer, deleteLayer, layerMenuItems } from './commands.js';
 import { state, on, emit, selectLayer, checkpoint, projectChanged, newTextLayer, selectedLayer, createProject } from '../../app/store.js';
 import { createStage } from './stage.js';
 import { createInspector } from './inspector.js';
@@ -88,6 +89,7 @@ export function mountTitles({ left, right, center, exportSlot, sizes, applySizes
         on: {
           click: () => selectLayer(layer.id),
           dblclick: () => { selectLayer(layer.id); emit('edit-layer', layer.id); },
+          contextmenu: (e) => { if (state.selectedLayerId !== layer.id) selectLayer(layer.id); contextMenu(e, layerMenuItems(layer)); },
           keydown: (e) => { if (e.key === 'Enter') selectLayer(layer.id); },
           dragstart: (e) => { e.dataTransfer.setData('text/x-layer', layer.id); },
           dragover: (e) => e.preventDefault(),
@@ -129,27 +131,9 @@ export function mountTitles({ left, right, center, exportSlot, sizes, applySizes
     selectLayer(layer.id);
     emit('edit-layer', layer.id);
   }
-  function duplicate() {
-    const l = selectedLayer();
-    if (!l) return;
-    checkpoint('project', 'Duplicate layer');
-    const json = JSON.parse(JSON.stringify({ ...l, doc: null }));
-    const copy = { ...json, id: 'layer_' + Math.random().toString(36).slice(2), doc: { chars: [...l.doc.chars], styles: [...l.doc.styles], paras: l.doc.paras.map((p) => ({ ...p })), typing: l.doc.typing }, x: l.x + 30, y: l.y + 30, name: l.name + ' ' + t('copy'), rev: 0, layoutRev: 0 };
-    const i = state.project.layers.indexOf(l);
-    state.project.layers.splice(i + 1, 0, copy);
-    projectChanged();
-    selectLayer(copy.id);
-  }
-  function removeSelected() {
-    const l = selectedLayer();
-    if (!l) return;
-    checkpoint('project', 'Delete layer');
-    state.edit = null;
-    state.project.layers = state.project.layers.filter((x) => x !== l);
-    selectLayer(null);
-    projectChanged();
-    undoToast(t('Deleted {name}', { name: iso(l.name || t('Text')) }));
-  }
+  // the shared commands (also on the stage's right-click menu)
+  const duplicate = () => duplicateLayer();
+  const removeSelected = () => deleteLayer();
   function newTitle() {
     checkpoint('project', 'New title');
     state.edit = null;

@@ -1,6 +1,7 @@
 // Face recolouring for whole fonts: presets, the font's main face colour, and colour variants.
 import { rgbToHsl } from './image.js';
 import { cloneFont, touch } from './font.js';
+import { GRADIENT_PRESETS } from './gradients.js';
 
 const stops = (...pairs) => pairs.map(([pos, color]) => ({ pos, color }));
 /**
@@ -32,7 +33,17 @@ export const FACE_PRESETS = [
   { name: 'Red', stops: stops([0.15, '#8f0016'], [0.3, '#d1142b'], [0.5, '#ff4b4b'], [0.7, '#ff8f80'], [0.9, '#ffe0d8']) },
   { name: 'Green', stops: stops([0.2, '#0b6b2c'], [0.4, '#1fae4b'], [0.6, '#6fe36a'], [0.8, '#c9ff9e'], [0.95, '#f4ffe6']) },
   { name: 'Purple', stops: stops([0.15, '#3d1287'], [0.35, '#6a2fd8'], [0.55, '#9d6bff'], [0.75, '#cdb3ff'], [0.95, '#f3edff']) },
+  // the colour transitions of the sheet prompts: the darker end on the darker parts of the face
+  ...GRADIENT_PRESETS.map((g) => ({ name: g.name, stops: byBrightness(g.stops) })),
 ];
+
+/** Gradient stops laid out dark to light across the face's brightness range (0.2 to 0.95), whichever way they run. */
+function byBrightness(list) {
+  const luma = (hex) => { const n = parseInt(hex.slice(1), 16); return 0.2126 * ((n >> 16) & 255) + 0.7152 * ((n >> 8) & 255) + 0.0722 * (n & 255); };
+  const sorted = [...list].sort((a, b) => a.pos - b.pos);
+  const ordered = luma(sorted[0].color) > luma(sorted[sorted.length - 1].color) ? sorted.reverse() : sorted;
+  return ordered.map((s, i) => ({ pos: 0.2 + (0.75 * i) / (ordered.length - 1), color: s.color }));
+}
 
 export const hexRgb = (hex) => { const n = parseInt(String(hex).replace('#', '').padEnd(6, '0').slice(0, 6), 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; };
 

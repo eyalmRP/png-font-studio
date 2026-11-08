@@ -2,7 +2,7 @@
 import { h, clear, icon, pickFiles, storeGet, storeSet, rafThrottle } from '../dom.js';
 import { t, iso } from '../i18n.js';
 import {
-  section, iconButton, button, numberField, pills, toggle, select, toast, confirmDialog, promptDialog, menu, colorField, gradientField, hexToRgb, modal,
+  section, iconButton, button, numberField, pills, toggle, select, toast, confirmDialog, promptDialog, menu, contextMenu, colorField, gradientField, hexToRgb, modal,
 } from '../controls.js';
 import { state, on, emit, addFont, removeFont, currentFont, fontChanged, checkpoint, setUI } from '../../app/store.js';
 import {
@@ -76,6 +76,7 @@ export function mountFonts({ left, right, center, exportSlot }) {
     iconButton('more', t('More'), (e) => fontMenu(e.currentTarget)),
   ] }, list,
   h('div.row-ctl', button({ label: t('Import sheets'), icon: 'imagePlus', kind: 'primary', onClick: () => openImporter() }), button({ label: t('Open font'), icon: 'open', onClick: () => openFontFile() })));
+  let openColourEditor = () => {};
   const recolorSec = buildRecolor();
   left.append(h('div.panel-scroll', libSec, recolorSec));
 
@@ -85,7 +86,7 @@ export function mountFonts({ left, right, center, exportSlot }) {
       const f = state.fonts.get(id);
       const c = h('canvas', { 'aria-hidden': 'true' });
       const n = [...f.glyphs.values()].filter((g) => g.image).length;
-      list.appendChild(h('button.font-item', { type: 'button', role: 'option', 'aria-selected': id === state.currentFontId, class: id === state.currentFontId ? 'on' : '', on: { click: () => { state.currentFontId = id; state.selectedGlyph = null; state.selectedGlyphs.clear(); emit('fonts'); } } },
+      list.appendChild(h('button.font-item', { type: 'button', role: 'option', 'aria-selected': id === state.currentFontId, class: id === state.currentFontId ? 'on' : '', on: { click: () => selectFont(id), contextmenu: (e) => { selectFont(id); contextMenu(e, fontMenuItems(f)); } } },
         c, h('div.meta', h('span.name', f.name), h('span', t('{n} glyphs', { n })))));
       requestAnimationFrame(() => drawSample(c, 'Abc 123', { fontId: id, height: 30, maxWidth: 220 }));
     }
@@ -279,9 +280,9 @@ export function mountFonts({ left, right, center, exportSlot }) {
     const recolor = (img, memo) => {
       const out = cloneImage(img);
       if (mode === 'face' && palette) remapPalette(out.data, face.hue, anchorsFor(currentFont()), memo);
-      else if (mode === 'face') recolorRange(out.data, face, faceStops.map((x) => ({ pos: x.pos, color: hexToRgb(x.color) })));
+      else if (mode === 'face') recolorRange(out.data, face, faceStops.map((x) => ({ pos: x.pos, color: hexToRgb(x.color), opacity: x.opacity })));
       else if (mode === 'hsl') adjustHsl(out.data, hue, sat / 100, light / 100);
-      else gradientMap(out.data, stops.map((x) => ({ pos: x.pos, color: hexToRgb(x.color) })), 1);
+      else gradientMap(out.data, stops.map((x) => ({ pos: x.pos, color: hexToRgb(x.color), opacity: x.opacity })), 1);
       return out;
     };
     const make = async (asNew) => {
@@ -368,6 +369,7 @@ export function mountFonts({ left, right, center, exportSlot }) {
       faceHue.setValue(face.hue); faceWidth.setValue(face.width); faceSoft.setValue(face.soft);
       sync(); swatch(); syncFace(); syncTiles(); drawTiles(panelTiles); redraw();
     };
+    openColourEditor = openEditor;
     // the panel: the presets on this font, and the way into the editor
     const panelTiles = presetTiles(30, (pr) => { mode = 'face'; modeP.setValue(mode); sync(); pickPreset(pr); openEditor(); });
     sync(); swatch(); syncFace(); syncTiles();
@@ -485,6 +487,7 @@ export function mountFonts({ left, right, center, exportSlot }) {
           dragover: (e) => { e.preventDefault(); cell.classList.add('drop-target'); },
           dragleave: () => cell.classList.remove('drop-target'),
           drop: (e) => onCellDrop(e, ch, cell),
+          contextmenu: (e) => { if (!(state.selectedGlyphs.size > 1 && state.selectedGlyphs.has(ch))) selectGlyph(ch); contextMenu(e, glyphMenuItems(font, ch)); },
         },
       }, canvas, h('div.cell-label', h('b', ch === ' ' ? '␠' : ch), h('span', charLabel(ch).replace('U+', ''))));
       if (has) hoverZoom(cell, (card) => {
@@ -613,7 +616,7 @@ export function mountFonts({ left, right, center, exportSlot }) {
 
   function glyphSection(font, ch, g) {
     const canvas = h('canvas', { 'aria-label': t('Glyph preview. Drag the glyph to move it; drag the right edge line to change spacing.') });
-    const pv = h('div.glyph-preview', canvas);
+    const pv = h('div.glyph-preview', { on: { contextmenu: (e) => contextMenu(e, glyphMenuItems(font, ch)) } }, canvas);
     const redraw = () => {
       const r = pv.getBoundingClientRect();
       previewInfo = drawGlyphOnGuides(canvas, font, font.glyphs.get(ch), { ...state.ui.guides, advance: true }, { w: Math.max(200, r.width || 280), h: 260, pad: 18, empty: ch });
@@ -686,22 +689,11 @@ export function mountFonts({ left, right, center, exportSlot }) {
       autoT.setValue(gg.autoBaseline);
     }
     syncFields();
-    const imgOp = (label, fn) => () => { checkpoint('font:' + font.id, label); g.image = fn(g.image); g.rev++; if (g.autoBaseline) autoMetrics(font); touch(font); afterFontEdit(font); };
-    const clearImage = () => { checkpoint('font:' + font.id, 'Clear glyph'); g.image = null; g.rev++; touch(font); afterFontEdit(font); undoToast(t('Cleared the image of “{c}”', { c: iso(ch) })); };
     // the image fixes live in one menu, so the panel keeps to the everyday actions
-    const imageBtn = menuButton({ label: t('Edit image'), icon: 'wand', onClick: (e) => menu(e.currentTarget, [
-      { label: t('Flip ↔'), icon: 'flipH', onClick: imgOp('Flip', (im) => flipImage(im, true)) },
-      { label: t('Flip ↕'), icon: 'flipV', onClick: imgOp('Flip', (im) => flipImage(im, false)) },
-      { label: t('Rotate 90°'), icon: 'rotateCw', onClick: imgOp('Rotate', (im) => rotate90(im, true)) },
-      '-',
-      { label: t('Trim edges'), icon: 'crop', onClick: imgOp('Trim', (im) => trimImage(im, 8, 1).image) },
-      { label: t('Clean specks'), icon: 'eraser', onClick: imgOp('Clean up', (im) => cleanupAlpha(im, { low: 28, high: 160, minArea: 30 }).image) },
-      '-',
-      { label: t('Clear image'), icon: 'squareDashed', danger: true, onClick: clearImage },
-    ]) });
+    const imageBtn = menuButton({ label: t('Edit image'), icon: 'wand', onClick: (e) => menu(e.currentTarget, imageEditItems(font, ch)) });
     const tools = h('div.tool-grid',
-      button({ label: t('Replace image'), icon: 'replace', onClick: async () => { const [f] = await pickFiles({ multiple: false }); if (f) replaceGlyphFromFile(font, ch, f); } }),
-      button({ label: t('Duplicate to…'), icon: 'copy', onClick: async () => { const to = await promptDialog(t('Duplicate glyph'), t('Copy “{c}” to character', { c: ch }), ''); if (!to) return; checkpoint('font:' + font.id, 'Duplicate glyph'); duplicateGlyph(font, ch, to); state.selectedGlyph = to; afterFontEdit(font); } }),
+      button({ label: t('Replace image'), icon: 'replace', onClick: () => pickGlyphImage(font, ch) }),
+      button({ label: t('Duplicate to…'), icon: 'copy', onClick: () => duplicateTo(font, ch) }),
       imageBtn,
       button({ label: t('Delete glyph'), icon: 'trash', kind: 'danger', onClick: () => deleteGlyphs([ch]) }),
     );
@@ -771,6 +763,71 @@ export function mountFonts({ left, right, center, exportSlot }) {
       rows.childNodes.length ? rows : h('p.hint', t('No pairs yet. Optical kerning works without pairs; add pairs to fine-tune Metrics kerning.')),
       h('div.row', other, button({ label: g.char + ' + ?', onClick: () => add(true) }), button({ label: '? + ' + g.char, onClick: () => add(false) })),
       h('p.hint', t('New pairs start from the optical value.')));
+  }
+
+  // ---------- glyph and font actions (the panels' buttons and the right-click menus) ----------
+  async function pickGlyphImage(font, ch) {
+    const [f] = await pickFiles({ multiple: false });
+    if (f) replaceGlyphFromFile(font, ch, f);
+  }
+  async function duplicateTo(font, ch) {
+    const to = await promptDialog(t('Duplicate glyph'), t('Copy “{c}” to character', { c: ch }), '');
+    if (!to) return;
+    checkpoint('font:' + font.id, 'Duplicate glyph');
+    duplicateGlyph(font, ch, to);
+    state.selectedGlyph = to;
+    afterFontEdit(font);
+  }
+  function imageEditItems(font, ch) {
+    const g = font.glyphs.get(ch);
+    const imgOp = (label, fn) => () => { checkpoint('font:' + font.id, label); g.image = fn(g.image); g.rev++; if (g.autoBaseline) autoMetrics(font); touch(font); afterFontEdit(font); };
+    const clearImage = () => { checkpoint('font:' + font.id, 'Clear glyph'); g.image = null; g.rev++; touch(font); afterFontEdit(font); undoToast(t('Cleared the image of “{c}”', { c: iso(ch) })); };
+    return [
+      { label: t('Flip ↔'), icon: 'flipH', onClick: imgOp('Flip', (im) => flipImage(im, true)) },
+      { label: t('Flip ↕'), icon: 'flipV', onClick: imgOp('Flip', (im) => flipImage(im, false)) },
+      { label: t('Rotate 90°'), icon: 'rotateCw', onClick: imgOp('Rotate', (im) => rotate90(im, true)) },
+      '-',
+      { label: t('Trim edges'), icon: 'crop', onClick: imgOp('Trim', (im) => trimImage(im, 8, 1).image) },
+      { label: t('Clean specks'), icon: 'eraser', onClick: imgOp('Clean up', (im) => cleanupAlpha(im, { low: 28, high: 160, minArea: 30 }).image) },
+      '-',
+      { label: t('Clear image'), icon: 'squareDashed', danger: true, onClick: clearImage },
+    ];
+  }
+  function glyphMenuItems(font, ch) {
+    const g = font.glyphs.get(ch);
+    // several glyphs selected, and this is one of them: act on all of them
+    if (state.selectedGlyphs.size > 1 && state.selectedGlyphs.has(ch)) {
+      const chars = [...state.selectedGlyphs];
+      return [{ label: t('Delete {n} glyphs', { n: chars.length }), icon: 'trash', danger: true, onClick: () => deleteGlyphs(chars) }];
+    }
+    if (!g || !g.image) return [{ label: t('Add an image…'), icon: 'imagePlus', onClick: () => pickGlyphImage(font, ch) }];
+    return [
+      { label: t('Replace image…'), icon: 'replace', onClick: () => pickGlyphImage(font, ch) },
+      { label: t('Duplicate to…'), icon: 'copy', onClick: () => duplicateTo(font, ch) },
+      '-',
+      ...imageEditItems(font, ch),
+      '-',
+      { label: t('Delete glyph'), icon: 'trash', danger: true, onClick: () => deleteGlyphs([ch]) },
+    ];
+  }
+  function selectFont(id) {
+    if (state.currentFontId === id) return;
+    state.currentFontId = id; state.selectedGlyph = null; state.selectedGlyphs.clear();
+    emit('fonts');
+  }
+  function fontMenuItems(f) {
+    return [
+      { label: t('Use in a title'), icon: 'type', onClick: () => { selectFont(f.id); setUI({ mode: 'titles' }); emit('remount'); } },
+      { label: t('Colour variants…'), icon: 'palette', onClick: () => { selectFont(f.id); openColourEditor(); } },
+      '-',
+      { label: t('Rename font'), icon: 'pencil', onClick: async () => { const n = await promptDialog(t('Rename font'), t('Font name'), f.name); if (n) { checkpoint('font:' + f.id, 'Rename font'); f.name = n; fontChanged(f); emit('fonts'); } } },
+      { label: t('Duplicate font'), icon: 'copy', onClick: () => { const c = cloneFont(f); addFont(c); saveFontRecord(c); } },
+      { label: t('Save font file'), icon: 'save', onClick: () => saveFontFile(f) },
+      { label: t('Export PSD: stacked letters'), icon: 'layers', onClick: () => exportPSD(f, 'stack') },
+      { label: t('Export PSD: full sheet'), icon: 'grid', onClick: () => exportPSD(f, 'sheet') },
+      '-',
+      { label: t('Delete font'), icon: 'trash', danger: true, onClick: () => deleteFont(f) },
+    ];
   }
 
   async function deleteGlyphs(chars) {

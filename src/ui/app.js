@@ -1,11 +1,11 @@
 // App shell: top bar, mode switching, resizable panels, theme/language, global shortcuts.
 import { h, clear, icon, storeGet, storeSet } from './dom.js';
 import { t, setLang, getLang } from './i18n.js';
-import { tabs, iconButton, splitter, toast, menu } from './controls.js';
+import { tabs, iconButton, splitter, toast, menu, contextMenu } from './controls.js';
 import { showShortcuts } from './shortcuts.js';
 import { startTour } from './tour.js';
 import { phoneSheet } from './phonesheet.js';
-import { state, on, setUI, undo, redo, canUndo, canRedo, emit } from '../app/store.js';
+import { state, on, setUI, undo, redo, canUndo, canRedo, emit, lastUndoStep } from '../app/store.js';
 import { mountTitles } from './titles/titles.js';
 import { mountFonts } from './fonts/fonts.js';
 import { drawSample } from './sample.js';
@@ -70,6 +70,23 @@ export function render() {
     // on phones the theme button gives way to keep the top bar to one row
     ...(getComputedStyle(themeBtn).display === 'none' ? [{ label: t('Light / dark'), icon: isDark() ? 'sun' : 'moon', onClick: flipTheme }] : []),
   ]));
+  // right-click anywhere without a menu of its own
+  appMenuItems = () => {
+    const u = lastUndoStep();
+    return [
+      { label: u ? t('Undo: {what}', { what: t(u.label) }) : t('Undo'), icon: 'undo', hint: 'Ctrl+Z', disabled: !canUndo(), onClick: doUndo },
+      { label: t('Redo'), icon: 'redo', hint: 'Ctrl+Shift+Z', disabled: !canRedo(), onClick: doRedo },
+      '-',
+      state.ui.mode === 'titles'
+        ? { label: t('Go to Fonts'), icon: 'shapes', onClick: () => { setUI({ mode: 'fonts' }); render(); } }
+        : { label: t('Go to Titles'), icon: 'type', onClick: () => { setUI({ mode: 'titles' }); render(); } },
+      { label: t('Light / dark'), icon: isDark() ? 'sun' : 'moon', onClick: flipTheme },
+      { label: getLang() === 'he' ? 'English' : 'עברית', icon: 'languages', onClick: () => { setLang(getLang() === 'he' ? 'en' : 'he'); render(); } },
+      '-',
+      { label: t('Keyboard shortcuts'), icon: 'keyboard', hint: '?', onClick: () => showShortcuts() },
+      { label: t('User guide'), icon: 'book', hint: '↗', onClick: openGuide },
+    ];
+  };
   const exportSlot = h('div.group.export-slot');
   const bar = h('header.topbar', brand, modeTabs, h('div.spacer'), h('div.group', undoBtn, redoBtn), exportSlot, h('div.group', helpBtn, themeBtn), langPills);
 
@@ -116,6 +133,15 @@ function isDark() {
   if (th === 'light') return false;
   return matchMedia('(prefers-color-scheme: dark)').matches;
 }
+
+let appMenuItems = () => [];
+// text fields keep the browser's own menu (spelling, paste); a dialog keeps to itself
+window.addEventListener('contextmenu', (e) => {
+  if (e.defaultPrevented) return;
+  const el = e.target instanceof Element ? e.target : null;
+  if (el && el.closest('input, textarea, select, [contenteditable="true"], .modal-back')) return;
+  contextMenu(e, appMenuItems());
+});
 
 function doUndo() { const l = undo(); if (l) toast(t('Undid: {what}', { what: t(l) }), 'info', 1600); }
 function doRedo() { const l = redo(); if (l) toast(t('Redid: {what}', { what: t(l) }), 'info', 1600); }

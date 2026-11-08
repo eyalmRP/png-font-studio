@@ -11,6 +11,7 @@ import {
   IndentIncrease, IndentDecrease, ArrowDownToLine, ArrowUpToLine, PanelLeft, PanelRight, PanelBottom, Keyboard,
   GripVertical, Link2, Unlink2, Heart, CircleHelp, SquareSquare, BookOpen, Zap, Briefcase, Smile, PartyPopper, Timer, Hash, CaseUpper, CaseLower,
   WrapText, LetterText, Combine, Scissors, Pipette, Contrast, Paintbrush, Layers2, LayoutGrid, Cloud,
+  BringToFront, SendToBack, ArrowUp, ArrowDown, ClipboardPaste, TextSelect, Pencil, AlignHorizontalDistributeCenter, CopyPlus,
 } from 'lucide';
 
 export const ICONS = {
@@ -34,6 +35,8 @@ export const ICONS = {
   zap: Zap, briefcase: Briefcase, smile: Smile, party: PartyPopper, timer: Timer, hash: Hash, caseUpper: CaseUpper,
   caseLower: CaseLower, wrap: WrapText, letters: LetterText, combine: Combine, scissors: Scissors, pipette: Pipette,
   contrast: Contrast, brush: Paintbrush, layers2: Layers2, layout: LayoutGrid, cloud: Cloud,
+  bringFront: BringToFront, sendBack: SendToBack, arrowUp: ArrowUp, arrowDown: ArrowDown, paste: ClipboardPaste,
+  selectAll: TextSelect, pencil: Pencil, distribute: AlignHorizontalDistributeCenter, copyPlus: CopyPlus,
   // a hollow capital A: outlined text, for the stroke effect (lucide has none)
   outlineText: ['svg', Square[1], [['path', { d: 'M3 21 10 3h4l7 18h-4.5l-1.3-3.5H8.8L7.5 21Z' }], ['path', { d: 'M10.1 14h3.8L12 8.6Z' }]]],
 };

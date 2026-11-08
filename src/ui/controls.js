@@ -1,4 +1,5 @@
 // Controls kit: scrub number fields, sliders, angle dials, pills, switches, sections, tabs, colour and gradient fields.
+import { GRADIENT_PRESETS, gradientCss, stopCss } from '../core/gradients.js';
 import { h, icon, storeGet, storeSet } from './dom.js';
 import { t } from './i18n.js';
 
@@ -228,8 +229,18 @@ export function section(o, ...children) {
     o.badge ? h('span.sec-badge', o.badge) : null);
   const reset = o.onReset ? iconButton('rotateCcw', o.resetLabel || t('Reset to default'), () => o.onReset(), { class: 'sec-reset' }) : null;
   const actions = h('div.sec-actions', ...(o.actions || []), reset);
-  const el = h('section.sec', { class: o.class || '' }, h('div.sec-top', head, actions), body);
+  const top = h('div.sec-top', head, actions);
+  const el = h('section.sec', { class: o.class || '' }, top, body);
   const render = () => { el.classList.toggle('open', open); head.setAttribute('aria-expanded', open); };
+  // right-click a panel's header: its own buttons as a menu (show, move, reset, duplicate, delete…), and fold it
+  top.addEventListener('contextmenu', (e) => {
+    const btns = [...actions.querySelectorAll('button')].filter((b) => b.getClientRects().length);
+    contextMenu(e, [
+      { label: open ? t('Collapse') : t('Expand'), icon: open ? 'chevronUp' : 'chevronDown', onClick: () => head.click() },
+      btns.length && '-',
+      ...btns.map((b) => ({ label: b.getAttribute('aria-label') || b.title || b.textContent.trim(), iconNode: b.querySelector('svg'), disabled: b.disabled, onClick: () => b.click() })),
+    ]);
+  });
   head.addEventListener('click', () => { open = !open; storeSet(key, open); render(); });
   el.body = body;
   render();
@@ -301,57 +312,144 @@ export function colorField(o) {
 
 /** Gradient bar: drag stops, click the bar to add, drag a stop away (down) to remove. stops: [{pos, color}] */
 export function gradientField(o) {
-  let stops = (o.stops || []).map((s) => ({ ...s }));
+  // a full gradient editor: colour, opacity and location per stop; add, delete, reverse, even spacing, presets
+  const norm = (list) => (list || []).map((x) => ({ pos: clamp(+x.pos || 0, 0, 1), color: normHex(x.color) || '#000000', opacity: x.opacity == null ? 1 : clamp(+x.opacity, 0, 1) }));
+  let stops = norm(o.stops);
+  if (stops.length < 2) stops = norm([{ pos: 0, color: stops[0]?.color || '#ffffff' }, { pos: 1, color: '#000000' }]);
   let sel = 0;
-  const bar = h('div.gf-bar', { title: t('Click to add a colour stop. Drag a stop down to remove it.') });
+  const bar = h('div.gf-bar', { title: t('Click to add a colour stop. Drag a stop away from the bar to remove it.') });
   const stopsEl = h('div.gf-stops');
-  const color = colorField({ value: stops[0]?.color, onInput: (c) => { if (stops[sel]) { stops[sel].color = c; render(); emit(false); } }, onChange: () => emit(true) });
+  const color = colorField({ label: t('Colour'), value: stops[0].color, onInput: (c) => { if (stops[sel]) { stops[sel].color = c; render(); emit(false); } }, onChange: () => emit(true) });
+  const opF = numberField({ label: t('Opacity'), iconName: 'droplet', value: 100, min: 0, max: 100, unit: '%', onInput: (v) => { if (stops[sel]) { stops[sel].opacity = v / 100; render(); emit(false); } }, onChange: () => emit(true) });
   const posF = numberField({ label: t('Location'), value: 0, min: 0, max: 100, unit: '%', onInput: (v) => { if (stops[sel]) { stops[sel].pos = v / 100; render(); emit(false); } }, onChange: () => emit(true) });
-  const el = h('div.gf', h('div.gf-track', bar, stopsEl), h('div.gf-edit', color, posF));
-  const emit = (commit) => { const out = stops.map((s) => ({ ...s })).sort((a, b) => a.pos - b.pos); (commit ? o.onChange : o.onInput)?.(out); };
-  function render() {
-    const sorted = [...stops].sort((a, b) => a.pos - b.pos);
-    bar.style.background = `linear-gradient(90deg, ${sorted.map((s) => `${s.color} ${s.pos * 100}%`).join(', ')})`;
+  const addB = iconButton('plus', t('Add a colour stop'), () => addAt(widestGap()));
+  const delB = iconButton('trash', t('Delete the colour stop'), () => removeAt(sel));
+  const revB = iconButton('arrowsH', t('Reverse the gradient'), () => reverse());
+  const evenB = iconButton('distribute', t('Space the stops evenly'), () => distribute());
+  const presetB = button({ label: t('Presets'), icon: 'palette', class: 'gf-presets', onClick: (e) => menu(e.currentTarget, presetItems()) });
+  presetB.append(icon('chevronDown', 14));
+  const el = h('div.gf', h('div.gf-track', bar, stopsEl), h('div.gf-tools', presetB, h('span.gf-spacer'), addB, delB, revB, evenB), color, h('div.grid2', opF, posF));
+
+  const sorted = () => [...stops].sort((a, b) => a.pos - b.pos);
+  const emit = (commit) => { const out = sorted().map((x) => ({ ...x })); (commit ? o.onChange : o.onInput)?.(out); };
+  // colour and opacity of the gradient at a point, for a new stop that changes nothing until it is edited
+  function sample(pos) {
+    const st = sorted();
+    let a = st[0], b = st[st.length - 1];
+    if (pos <= a.pos) b = a; else if (pos >= b.pos) a = b;
+    else for (let i = 0; i < st.length - 1; i++) if (pos >= st[i].pos && pos <= st[i + 1].pos) { a = st[i]; b = st[i + 1]; break; }
+    const f = b.pos === a.pos ? 0 : (pos - a.pos) / (b.pos - a.pos);
+    const ca = hexToRgb(a.color), cb = hexToRgb(b.color);
+    return { color: rgbToHex(ca.map((v, k) => v + (cb[k] - v) * f)), opacity: a.opacity + (b.opacity - a.opacity) * f };
+  }
+  function widestGap() {
+    const st = sorted();
+    let best = 0.5, w = -1;
+    for (let i = 0; i < st.length - 1; i++) if (st[i + 1].pos - st[i].pos > w) { w = st[i + 1].pos - st[i].pos; best = (st[i].pos + st[i + 1].pos) / 2; }
+    return best;
+  }
+  function select(i, focus) {
+    sel = clamp(i, 0, stops.length - 1);
+    const x = stops[sel];
+    color.setValue(x.color); opF.setValue(Math.round(x.opacity * 100)); posF.setValue(Math.round(x.pos * 100));
+    render(focus);
+  }
+  function addAt(pos, from = null) {
+    const x = from ? { ...from, pos } : { pos, ...sample(pos) };
+    stops.push(x); select(stops.length - 1); emit(true);
+  }
+  function removeAt(i) {
+    if (stops.length <= 2) return;
+    stops.splice(i, 1); select(Math.min(i, stops.length - 1)); emit(true);
+  }
+  function reverse() { for (const x of stops) x.pos = Math.round((1 - x.pos) * 1000) / 1000; select(sel); emit(true); }
+  function distribute() {
+    const st = sorted();
+    st.forEach((x, i) => { x.pos = Math.round((i / (st.length - 1)) * 1000) / 1000; });
+    select(sel); emit(true);
+  }
+  function apply(list) { stops = norm(list); select(0); emit(true); }
+  function presetItems() {
+    const cur = presets();
+    return cur.map((p) => ({ label: t(p.name), swatch: gradientCss(p.stops), onClick: () => apply(p.stops) }));
+  }
+  const presets = () => [...GRADIENT_PRESETS, ...(o.presets || [])];
+  function stopMenu(e, i) {
+    contextMenu(e, [
+      { label: t('Duplicate the colour stop'), icon: 'copyPlus', onClick: () => addAt(clamp(stops[i].pos + (stops[i].pos > 0.9 ? -0.05 : 0.05), 0, 1), stops[i]) },
+      { label: t('Delete the colour stop'), icon: 'trash', disabled: stops.length <= 2, onClick: () => removeAt(i) },
+      '-',
+      ...[100, 50, 0].map((v) => ({ label: `${t('Opacity')} ${v}%`, checked: Math.round(stops[i].opacity * 100) === v, onClick: () => { stops[i].opacity = v / 100; select(i); emit(true); } })),
+      '-',
+      { label: t('Reverse the gradient'), icon: 'arrowsH', onClick: reverse },
+      { label: t('Space the stops evenly'), icon: 'distribute', onClick: distribute },
+    ]);
+  }
+  bar.addEventListener('contextmenu', (e) => {
+    const r = bar.getBoundingClientRect();
+    const pos = clamp((e.clientX - r.left) / r.width, 0, 1);
+    contextMenu(e, [
+      { label: t('Add a colour stop here'), icon: 'plus', onClick: () => addAt(pos) },
+      { label: t('Reverse the gradient'), icon: 'arrowsH', onClick: reverse },
+      { label: t('Space the stops evenly'), icon: 'distribute', onClick: distribute },
+      '-',
+      ...presetItems(),
+    ]);
+  });
+
+  function render(focus) {
+    const hadFocus = focus || stopsEl.contains(document.activeElement);
+    // see-through stops show the checkerboard behind them
+    bar.style.background = `${gradientCss(stops)}, var(--checker) 0 0 / 10px 10px`;
     stopsEl.textContent = '';
-    stops.forEach((s, i) => {
-      const k = h('button.gf-stop', { type: 'button', class: i === sel ? 'on' : '', style: { insetInlineStart: `${s.pos * 100}%`, background: s.color }, 'aria-label': `${t('Colour stop')} ${i + 1}` });
-      if (document.documentElement.dir === 'rtl') { k.style.insetInlineStart = ''; k.style.left = `${s.pos * 100}%`; }
+    delB.disabled = stops.length <= 2;
+    let selBtn = null;
+    stops.forEach((x, i) => {
+      const pct = Math.round(x.pos * 100);
+      const k = h('button.gf-stop', {
+        type: 'button', class: i === sel ? 'on' : '', tabIndex: i === sel ? 0 : -1,
+        'aria-label': `${t('Colour stop')} ${i + 1}: ${x.color}, ${t('Opacity')} ${Math.round(x.opacity * 100)}%, ${t('Location')} ${pct}%`,
+        title: t('Drag to move · Delete key removes · right-click for more'),
+      }, h('span.gf-dot', { style: { background: `linear-gradient(${stopCss(x)}, ${stopCss(x)}), var(--checker) 0 0 / 6px 6px` } }));
+      k.style.left = `${x.pos * 100}%`;
       k.addEventListener('pointerdown', (e) => {
+        if (e.button !== 0) return;
         e.preventDefault(); e.stopPropagation();
-        sel = i; color.setValue(s.color); posF.setValue(Math.round(s.pos * 100)); render();
+        select(i, true);
         const r = bar.getBoundingClientRect();
         const mv = (ev) => {
-          s.pos = clamp((ev.clientX - r.left) / r.width, 0, 1);
-          const away = Math.abs(ev.clientY - (r.top + r.height / 2)) > 40 && stops.length > 2;
-          s._remove = away;
-          render(); posF.setValue(Math.round(s.pos * 100)); emit(false);
+          x.pos = clamp((ev.clientX - r.left) / r.width, 0, 1);
+          x._remove = Math.abs(ev.clientY - (r.top + r.height / 2)) > 40 && stops.length > 2;
+          render(); posF.setValue(Math.round(x.pos * 100)); emit(false);
         };
         const upH = () => {
           window.removeEventListener('pointermove', mv); window.removeEventListener('pointerup', upH);
-          if (s._remove) { stops.splice(stops.indexOf(s), 1); sel = 0; }
-          delete s._remove; render(); emit(true);
+          if (x._remove) { delete x._remove; removeAt(stops.indexOf(x)); return; }
+          delete x._remove; render(true); emit(true);
         };
         window.addEventListener('pointermove', mv); window.addEventListener('pointerup', upH);
       });
-      if (s._remove) k.classList.add('removing');
+      k.addEventListener('keydown', (e) => {
+        const step = e.shiftKey ? 0.1 : 0.01;
+        if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') { e.preventDefault(); e.stopPropagation(); x.pos = Math.round(clamp(x.pos + (e.key === 'ArrowRight' ? step : -step), 0, 1) * 1000) / 1000; select(i, true); emit(true); }
+        else if (e.key === 'Home' || e.key === 'End') { e.preventDefault(); x.pos = e.key === 'Home' ? 0 : 1; select(i, true); emit(true); }
+        else if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); e.stopPropagation(); removeAt(i); }
+        else if (e.key === 'ArrowUp' || e.key === 'ArrowDown') { e.preventDefault(); e.stopPropagation(); const st = sorted(); const j = st.indexOf(x) + (e.key === 'ArrowUp' ? 1 : -1); if (st[j]) select(stops.indexOf(st[j]), true); }
+      });
+      k.addEventListener('contextmenu', (e) => { select(i); stopMenu(e, i); });
+      if (x._remove) k.classList.add('removing');
+      if (i === sel) selBtn = k;
       stopsEl.appendChild(k);
     });
+    if (hadFocus && selBtn) selBtn.focus({ preventScroll: true });
   }
   bar.addEventListener('pointerdown', (e) => {
+    if (e.button !== 0) return;
     const r = bar.getBoundingClientRect();
-    const pos = clamp((e.clientX - r.left) / r.width, 0, 1);
-    const sorted = [...stops].sort((a, b) => a.pos - b.pos);
-    let c = sorted[0].color;
-    for (let i = 0; i < sorted.length - 1; i++) if (pos >= sorted[i].pos && pos <= sorted[i + 1].pos) {
-      const f = (pos - sorted[i].pos) / (sorted[i + 1].pos - sorted[i].pos || 1);
-      const a = hexToRgb(sorted[i].color), b = hexToRgb(sorted[i + 1].color);
-      c = rgbToHex(a.map((v, k) => v + (b[k] - v) * f));
-    }
-    stops.push({ pos, color: c }); sel = stops.length - 1; color.setValue(c); posF.setValue(Math.round(pos * 100)); render(); emit(true);
+    addAt(clamp((e.clientX - r.left) / r.width, 0, 1));
   });
-  el.setValue = (v) => { stops = (v || []).map((s) => ({ ...s })); sel = Math.max(0, Math.min(sel, stops.length - 1)); if (stops[sel]) { color.setValue(stops[sel].color); posF.setValue(Math.round(stops[sel].pos * 100)); } render(); };
-  posF.setValue(Math.round((stops[0]?.pos || 0) * 100));
-  render();
+  el.setValue = (v) => { stops = norm(v); if (stops.length < 2) stops = norm([{ pos: 0, color: '#ffffff' }, { pos: 1, color: '#000000' }]); select(Math.min(sel, stops.length - 1)); };
+  select(0);
   return el;
 }
 
@@ -442,20 +540,38 @@ export function promptDialog(title, label, value = '') {
 
 /** Dropdown menu anchored to an element. items: [{ label, icon, onClick, danger, disabled } | '-'] */
 export function menu(anchor, items) {
-  // the keyboard goes back to the button that opened the menu, so a dialog opened from it returns there too
-  const back = () => { if (anchor && anchor.isConnected) anchor.focus({ preventScroll: true }); };
-  const el = h('div.menu', { role: 'menu' }, items.map((it) => it === '-' ? h('div.menu-sep') : h('button.menu-item', {
-    type: 'button', role: 'menuitem', tabIndex: -1, disabled: it.disabled, class: it.danger ? 'danger' : '',
+  // anchor: the button that opened it (the menu drops below it), or a point { x, y } (a right-click)
+  const point = anchor && typeof anchor.getBoundingClientRect !== 'function' ? anchor : null;
+  const opener = point ? document.activeElement : anchor;
+  // the keyboard goes back to whatever opened the menu, so a dialog opened from it returns there too
+  const back = () => { if (opener && opener.isConnected && opener !== document.body) opener.focus({ preventScroll: true }); };
+  const list = items.filter((it) => it); // conditional items can be left out with false
+  while (list[0] === '-') list.shift();
+  while (list[list.length - 1] === '-') list.pop();
+  const el = h('div.menu', { role: 'menu' }, list.map((it, i) => it === '-' ? (list[i - 1] === '-' ? null : h('div.menu-sep')) : h('button.menu-item', {
+    type: 'button', role: it.checked == null ? 'menuitem' : 'menuitemcheckbox', 'aria-checked': it.checked == null ? null : String(!!it.checked),
+    tabIndex: -1, disabled: it.disabled, class: it.danger ? 'danger' : '',
     on: { click: () => { close(); back(); it.onClick && it.onClick(); } },
-  }, it.swatch ? h('span.menu-swatch', { style: { background: it.swatch } }) : it.icon ? icon(it.icon, 15) : h('span.menu-ic'), h('span', it.label), it.hint ? h('span.menu-hint', it.hint) : null)));
+  }, it.swatch ? h('span.menu-swatch', { class: /gradient/.test(it.swatch) ? 'wide' : '', style: { background: it.swatch } })
+    : it.checked ? icon('check', 15) : it.icon ? icon(it.icon, 15) : it.iconNode ? sized(it.iconNode.cloneNode(true)) : h('span.menu-ic'),
+  h('span', it.label), it.hint ? h('span.menu-hint', it.hint) : null)));
   document.body.appendChild(el);
-  const r = anchor.getBoundingClientRect();
   const mw = el.offsetWidth, mh = el.offsetHeight;
-  let x = document.documentElement.dir === 'rtl' ? r.right - mw : r.left;
-  let y = r.bottom + 4;
+  let x, y;
+  if (point) {
+    // at the pointer, opening toward the reading direction, kept inside the window
+    x = document.documentElement.dir === 'rtl' ? point.x - mw : point.x;
+    y = point.y;
+    if (x + mw > innerWidth - 8) x = point.x - mw;
+    if (y + mh > innerHeight - 8) y = Math.max(8, point.y - mh);
+  } else {
+    const r = anchor.getBoundingClientRect();
+    x = document.documentElement.dir === 'rtl' ? r.right - mw : r.left;
+    y = r.bottom + 4;
+    if (y + mh > innerHeight - 8) y = Math.max(8, r.top - mh - 4);
+  }
   if (x + mw > innerWidth - 8) x = innerWidth - mw - 8;
   if (x < 8) x = 8;
-  if (y + mh > innerHeight - 8) y = Math.max(8, r.top - mh - 4);
   el.style.left = x + 'px'; el.style.top = y + 'px';
   const off = (e) => { if (!el.contains(e.target)) close(); };
   // arrows move between the items (and nowhere else: not the selected title on the stage), Esc or Tab leaves
@@ -472,9 +588,36 @@ export function menu(anchor, items) {
     else if (e.key === 'Tab') close();
   };
   btns[0]?.focus({ preventScroll: true });
-  setTimeout(() => { window.addEventListener('pointerdown', off, true); window.addEventListener('keydown', key, true); });
-  function close() { el.remove(); window.removeEventListener('pointerdown', off, true); window.removeEventListener('keydown', key, true); }
+  // a right-click elsewhere closes this menu (and the next one opens); scrolling or resizing closes it too
+  const gone = () => close();
+  setTimeout(() => {
+    window.addEventListener('pointerdown', off, true); window.addEventListener('keydown', key, true);
+    window.addEventListener('resize', gone); window.addEventListener('blur', gone);
+  });
+  openMenus.add(close);
+  function close() {
+    if (!el.isConnected) return;
+    el.remove(); openMenus.delete(close);
+    window.removeEventListener('pointerdown', off, true); window.removeEventListener('keydown', key, true);
+    window.removeEventListener('resize', gone); window.removeEventListener('blur', gone);
+  }
   return { close };
+}
+const openMenus = new Set();
+const sized = (svg) => { svg.setAttribute('width', 15); svg.setAttribute('height', 15); return svg; };
+
+/**
+ * A right-click menu at the pointer. Call it from a contextmenu listener: it stops the browser's own menu and any
+ * menu further up the page (so the most specific place wins). Items as for menu(); false items are left out.
+ */
+export function contextMenu(e, items) {
+  e.preventDefault();
+  e.stopPropagation();
+  for (const close of [...openMenus]) close();
+  // a long press on a touch screen opens it at the finger, a keyboard (Shift+F10, the menu key) at the focus
+  let x = e.clientX, y = e.clientY;
+  if (!x && !y && e.target && e.target.getBoundingClientRect) { const r = e.target.getBoundingClientRect(); x = r.left + Math.min(24, r.width / 2); y = r.top + Math.min(24, r.height / 2); }
+  return menu({ x, y }, items);
 }
 
 /** Make a splitter that resizes a panel. side: 'start' | 'end' | 'bottom'. */

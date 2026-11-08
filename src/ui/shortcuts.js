@@ -8,7 +8,7 @@ import { modal } from './controls.js';
 const MAC = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent || '');
 const KEY_NAMES = MAC ? { Ctrl: '⌘', Alt: '⌥', Shift: '⇧' } : {};
 // words that stand for a mouse action rather than a key
-const WORDS = { drag: 'drag', wheel: 'wheel', 'double-click': 'Double-click', 'triple-click': 'Triple-click', click: 'click', arrows: 'Arrow keys' };
+const WORDS = { drag: 'drag', wheel: 'wheel', 'double-click': 'Double-click', 'triple-click': 'Triple-click', 'right-click': 'Right-click', click: 'click', arrows: 'Arrow keys' };
 
 // each row: [combos, what it does]; a combo is keys joined with +, combos are alternatives
 const GROUPS = [
@@ -16,6 +16,7 @@ const GROUPS = [
     [['Ctrl+Z'], 'Undo'],
     [['Ctrl+Shift+Z', 'Ctrl+Y'], 'Redo'],
     [['?'], 'Keyboard shortcuts'],
+    [['right-click'], 'Commands for what is under the pointer'],
   ]],
   ['Stage', [
     [['V'], 'Select and move'],
@@ -49,6 +50,11 @@ const GROUPS = [
     [['Ctrl+Shift+>', 'Ctrl+Shift+<'], 'Bigger / smaller text'],
     [['Ctrl+U'], 'Underline'],
     [['Ctrl+Backspace', 'Alt+Backspace'], 'Delete the word before the caret'],
+  ]],
+  ['Gradients', [
+    [['click'], 'Click the bar to add a colour stop'],
+    [['arrows'], 'Move the selected stop 1% (Shift: 10%)'],
+    [['Delete'], 'Remove the selected stop'],
   ]],
   ['Number fields', [
     [['↑', '↓'], 'Step (Shift: ×10, Alt: ×0.1)'],

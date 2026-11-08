@@ -553,21 +553,28 @@ export function adjustHsl(data, hueDeg = 0, sat = 0, light = 0) {
   return data;
 }
 
-/** Gradient map: luminance of each pixel picks a colour from stops [{pos 0..1, color [r,g,b]}]. */
+const stopAlpha = (s) => (s.opacity == null ? 1 : Math.min(1, Math.max(0, s.opacity)));
+
+/**
+ * Gradient map: luminance of each pixel picks a colour from stops [{pos 0..1, color [r,g,b], opacity 0..1}].
+ * A stop's opacity is how much of its colour covers the pixel's own (0 keeps the original there).
+ */
 export function gradientMap(data, stops, amount = 1) {
   const sorted = [...stops].sort((a, b) => a.pos - b.pos);
-  const lut = new Uint8ClampedArray(256 * 3);
+  const lut = new Uint8ClampedArray(256 * 3), cover = new Float32Array(256);
   for (let v = 0; v < 256; v++) {
     const t = v / 255;
     let a = sorted[0], b = sorted[sorted.length - 1];
     for (let k = 0; k < sorted.length - 1; k++) if (t >= sorted[k].pos && t <= sorted[k + 1].pos) { a = sorted[k]; b = sorted[k + 1]; break; }
     const f = b.pos === a.pos ? 0 : Math.min(1, Math.max(0, (t - a.pos) / (b.pos - a.pos)));
     for (let c = 0; c < 3; c++) lut[v * 3 + c] = a.color[c] + (b.color[c] - a.color[c]) * f;
+    cover[v] = stopAlpha(a) + (stopAlpha(b) - stopAlpha(a)) * f;
   }
   for (let i = 0; i < data.length; i += 4) {
     if (!data[i + 3]) continue;
     const v = Math.round(0.2126 * data[i] + 0.7152 * data[i + 1] + 0.0722 * data[i + 2]);
-    for (let c = 0; c < 3; c++) data[i + c] = data[i + c] + (lut[v * 3 + c] - data[i + c]) * amount;
+    const w = amount * cover[v];
+    for (let c = 0; c < 3; c++) data[i + c] = data[i + c] + (lut[v * 3 + c] - data[i + c]) * w;
   }
   return data;
 }
@@ -606,7 +613,7 @@ export function signatureDistance(a, b) {
  */
 export function recolorRange(data, range, stops, amount = 1) {
   const sorted = [...stops].sort((a, b) => a.pos - b.pos);
-  const lut = new Float32Array(256 * 3);
+  const lut = new Float32Array(256 * 3), cover = new Float32Array(256);
   for (let v = 0; v < 256; v++) {
     const t = v / 255;
     let a = sorted[0], b = sorted[sorted.length - 1];
@@ -614,6 +621,7 @@ export function recolorRange(data, range, stops, amount = 1) {
     else for (let k = 0; k < sorted.length - 1; k++) if (t >= sorted[k].pos && t <= sorted[k + 1].pos) { a = sorted[k]; b = sorted[k + 1]; break; }
     const f = b.pos === a.pos ? 0 : (t - a.pos) / (b.pos - a.pos);
     for (let c = 0; c < 3; c++) lut[v * 3 + c] = a.color[c] + (b.color[c] - a.color[c]) * f;
+    cover[v] = stopAlpha(a) + (stopAlpha(b) - stopAlpha(a)) * f; // a stop's opacity: how much of its colour covers the face
   }
   const { hue, width = 40, soft = 25, minSat = 0.15 } = range;
   for (let i = 0; i < data.length; i += 4) {
@@ -627,7 +635,8 @@ export function recolorRange(data, range, stops, amount = 1) {
     if (w <= 0) continue;
     w *= amount;
     // key on perceived brightness, not HSL lightness: saturated cyan and blue share 50% lightness
-    const li = Math.round(Math.min(255, 0.2126 * data[i] + 0.7152 * data[i + 1] + 0.0722 * data[i + 2])) * 3;
+    const lv = Math.round(Math.min(255, 0.2126 * data[i] + 0.7152 * data[i + 1] + 0.0722 * data[i + 2])), li = lv * 3;
+    w *= cover[lv];
     for (let c = 0; c < 3; c++) data[i + c] = data[i + c] + (lut[li + c] - data[i + c]) * w;
   }
   return data;

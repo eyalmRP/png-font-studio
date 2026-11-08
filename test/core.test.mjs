@@ -323,3 +323,28 @@ test('nearestSeedValue: every pixel takes the value of its nearest seed', async 
   }
   assert.deepEqual([...nearestSeedValue(new Uint8Array(4), new Float32Array(4), 2, 2, 1)], [1, 1, 1, 1]);
 });
+
+test('gradient stop opacity sets how much of the new colour covers a pixel', async () => {
+  const { gradientMap, recolorRange } = await import('../src/core/image.js');
+  const px = () => new Uint8ClampedArray([40, 220, 255, 255]);
+  const stops = (opacity) => [{ pos: 0, color: [255, 0, 0], opacity }, { pos: 1, color: [255, 0, 0], opacity }];
+  assert.deepEqual([...gradientMap(px(), stops(0)).slice(0, 3)], [40, 220, 255], 'opacity 0 keeps the pixel');
+  assert.deepEqual([...gradientMap(px(), stops(1)).slice(0, 3)], [255, 0, 0], 'opacity 1 replaces it');
+  const half = gradientMap(px(), stops(0.5));
+  assert.ok(Math.abs(half[0] - 148) <= 1 && Math.abs(half[1] - 110) <= 1, 'opacity 0.5 mixes halfway');
+  const face = recolorRange(px(), { hue: 190, width: 40, soft: 10 }, stops(0));
+  assert.deepEqual([...face.slice(0, 3)], [40, 220, 255], 'a see-through face stop leaves the face');
+  const old = gradientMap(px(), [{ pos: 0, color: [255, 0, 0] }, { pos: 1, color: [255, 0, 0] }]);
+  assert.deepEqual([...old.slice(0, 3)], [255, 0, 0], 'stops saved before opacity are opaque');
+});
+
+test('prompt gradients are colour-variant presets, dark to light', async () => {
+  const { FACE_PRESETS } = await import('../src/core/recolor.js');
+  const { GRADIENT_PRESETS } = await import('../src/core/gradients.js');
+  for (const g of GRADIENT_PRESETS) {
+    const p = FACE_PRESETS.find((x) => x.name === g.name);
+    assert.ok(p, g.name + ' is a colour-variant preset');
+    const luma = (hex) => { const n = parseInt(hex.slice(1), 16); return 0.2126 * (n >> 16) + 0.7152 * ((n >> 8) & 255) + 0.0722 * (n & 255); };
+    assert.ok(luma(p.stops[0].color) <= luma(p.stops[p.stops.length - 1].color), g.name + ' runs dark to light');
+  }
+});

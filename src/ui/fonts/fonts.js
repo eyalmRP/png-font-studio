@@ -201,7 +201,10 @@ export function mountFonts({ left, right, center, exportSlot }) {
     const lightF = numberField({ label: t('Lightness'), def: 0, min: -100, max: 100, unit: '%', slider: true, value: light, onInput: (v) => { light = v; redraw(); }, onChange: () => {} });
     const grad = gradientField({ stops, onInput: (v) => { stops = v; redraw(); }, onChange: (v) => { stops = v; redraw(); } });
     // face mode controls
-    const faceGrad = gradientField({ stops: faceStops, onInput: (v) => { faceStops = v; presetName = t('Custom'); palette = null; syncFace(); syncTiles(); redraw(); }, onChange: (v) => { faceStops = v; redraw(); } });
+    // any change to the face gradient (a drag, a colour, a preset from its menu, a stop added, deleted, reversed or
+    // spaced) makes it a custom gradient: the preset's palette no longer applies
+    const faceEdited = (v) => { faceStops = v; presetName = t('Custom'); palette = null; syncFace(); syncTiles(); redraw(); };
+    const faceGrad = gradientField({ stops: faceStops, onInput: faceEdited, onChange: faceEdited });
 
     // a glyph with its image shrunk to at most maxH pixels and its scale raised to match: the same size in the
     // font, a fraction of the pixels to recolour (small previews redraw while a slider moves)

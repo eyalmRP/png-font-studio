@@ -300,7 +300,8 @@ export function colorField(o) {
   const sw = h('span.cf-swatch', picker);
   const text = h('input.cf-hex', { type: 'text', value, spellcheck: false, maxLength: 7, 'aria-label': (o.label || t('Colour')) + ' hex' });
   const el = h('div.cf', o.label ? h('span.cf-label', o.label) : null, sw, text);
-  const render = () => { sw.style.background = value; picker.value = value; if (document.activeElement !== text) text.value = value; };
+  // the hex box always shows the colour (typing in it fires nothing until Enter or leaving it)
+  const render = () => { sw.style.background = value; picker.value = value; text.value = value; };
   picker.addEventListener('input', () => { value = picker.value; render(); o.onInput && o.onInput(value); });
   picker.addEventListener('change', () => { value = picker.value; render(); o.onChange && o.onChange(value); });
   text.addEventListener('change', () => { const v = normHex(text.value); if (v) { value = v; render(); o.onInput && o.onInput(v); o.onChange && o.onChange(v); } else render(); });

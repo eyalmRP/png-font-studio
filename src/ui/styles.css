@@ -571,3 +571,7 @@ button { cursor: pointer; }
 .zc-label span { color: var(--fg-2); }
 .zc-label em { margin-inline-start: auto; font-style: normal; color: var(--muted); font-size: 12px; }
 @media (prefers-reduced-motion: reduce) { .zoom-card.on { animation: none; } }
+/* the editor's presets three across, so the tone colours stay in view below them */
+.cv-controls .cv-tiles { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+.cv-controls .cv-tile { padding: 7px 4px 5px; font-size: 11px; }
+.cv-controls .cv-tile span { text-align: center; line-height: 1.2; }

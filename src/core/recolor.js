@@ -250,3 +250,93 @@ export function faceVariant(font, presetName, name) {
   touch(out);
   return out;
 }
+
+// ---------- tones: black and white, then shadows, main and highlights ----------
+// Strip a design to its brightness and colour it with three tones. The zones come from the font's own tonal range,
+// so the letter face lands on the main tone whatever colours the font started in.
+
+const lumaOf = (r, g, b) => LUMA[0] * r + LUMA[1] * g + LUMA[2] * b; // 0..255 in, 0..255 out
+const toHex = (rgb01) => '#' + rgb01.map((v) => Math.round(Math.min(1, Math.max(0, v)) * 255).toString(16).padStart(2, '0')).join('');
+const rgb01 = (hex) => hexRgb(hex).map((v) => v / 255);
+
+/** A deep shade of a colour: the same hue, a little richer, at brightness y (0..1). */
+export function deepShade(hex, y = 0.24) {
+  const [h, c] = hcy(...rgb01(hex));
+  return toHex(fromHcy(h, Math.min(0.9, c * 1.1), y));
+}
+
+/**
+ * The three tones from a gradient: its light end for the highlights, its middle for the main tone, and for the
+ * shadows its dark end, deepened ('end'), or a deep shade of the main colour ('main').
+ */
+export function tonesFromStops(stops, base = 'end') {
+  const st = [...stops].sort((a, b) => a.pos - b.pos);
+  const p0 = st[0].pos, p1 = st[st.length - 1].pos;
+  const at = (t) => {
+    const p = p0 + (p1 - p0) * t;
+    let a = st[0], b = st[st.length - 1];
+    for (let k = 0; k < st.length - 1; k++) if (p >= st[k].pos && p <= st[k + 1].pos) { a = st[k]; b = st[k + 1]; break; }
+    const f = b.pos === a.pos ? 0 : (p - a.pos) / (b.pos - a.pos), A = rgb01(a.color), B = rgb01(b.color);
+    return A.map((v, i) => v + (B[i] - v) * f);
+  };
+  const ends = [at(0), at(1)].sort((a, b) => lumaOf(...a) - lumaOf(...b));
+  const main = toHex(at(0.5));
+  const dark = toHex(ends[0]);
+  return {
+    highlights: toHex(ends[1]), main,
+    shadows: base === 'main' ? deepShade(main, 0.24) : deepShade(dark, Math.min(lumaOf(...ends[0]), 0.32)),
+  };
+}
+
+const zoneCache = new WeakMap();
+/** The font's own tonal range (0..1): the brightness of its darkest tenth, its middle and its brightest. */
+export function toneZones(font) {
+  const c = zoneCache.get(font);
+  if (c && c.rev === font.rev) return c.zones;
+  const hist = new Float64Array(256);
+  let n = 0;
+  for (const g of font.glyphs.values()) {
+    if (!g.image) continue;
+    const d = g.image.data;
+    for (let i = 0; i < d.length; i += 16) if (d[i + 3] > 200) { hist[Math.round(lumaOf(d[i], d[i + 1], d[i + 2]))]++; n++; }
+  }
+  const q = (p) => { let acc = 0; for (let v = 0; v < 256; v++) { acc += hist[v]; if (acc >= p * n) return v / 255; } return 1; };
+  let zones = n ? { shadows: q(0.08), main: q(0.5), highlights: q(0.96) } : { shadows: 0.2, main: 0.5, highlights: 0.9 };
+  // keep the zones apart, so every tone gets some of the letter
+  const s = Math.min(zones.shadows, 0.8), m = Math.min(Math.max(zones.main, s + 0.08), 0.9), hh = Math.min(Math.max(zones.highlights, m + 0.06), 1);
+  zones = { shadows: s, main: m, highlights: hh };
+  zoneCache.set(font, { rev: font.rev, zones });
+  return zones;
+}
+
+/**
+ * A 256-step table from black-and-white brightness to colour. balance (-1..1) moves the main tone toward the
+ * shadows or the highlights; shine keeps the brightest glints white (the gloss of the letters).
+ */
+export function toneTable(tones, zones, { balance = 0, shine = true } = {}) {
+  const S = rgb01(tones.shadows), M = rgb01(tones.main), H = rgb01(tones.highlights);
+  const K = S.map((v) => v * 0.3), W = shine ? [1, 1, 1] : H;
+  const pS = zones.shadows, pH = zones.highlights;
+  const pM = balance >= 0 ? zones.main + (pH - zones.main) * 0.8 * balance : zones.main + (zones.main - pS) * 0.8 * balance;
+  const lut = new Uint8ClampedArray(256 * 3);
+  for (let v = 0; v < 256; v++) {
+    const y = v / 255;
+    let a, b, f;
+    if (y <= pS) { a = K; b = S; f = pS ? y / pS : 1; }
+    else if (y <= pM) { a = S; b = M; f = (y - pS) / (pM - pS || 1); }
+    else if (y <= pH) { a = M; b = H; f = (y - pM) / (pH - pM || 1); }
+    else { a = H; b = W; f = (y - pH) / (1 - pH || 1); }
+    for (let k = 0; k < 3; k++) lut[v * 3 + k] = Math.round((a[k] + (b[k] - a[k]) * f) * 255);
+  }
+  return lut;
+}
+
+/** Recolour pixels through a tone table: each one's brightness picks its colour; transparency is kept. */
+export function applyTones(data, lut) {
+  for (let i = 0; i < data.length; i += 4) {
+    if (!data[i + 3]) continue;
+    const v = Math.round(lumaOf(data[i], data[i + 1], data[i + 2])) * 3;
+    data[i] = lut[v]; data[i + 1] = lut[v + 1]; data[i + 2] = lut[v + 2];
+  }
+  return data;
+}

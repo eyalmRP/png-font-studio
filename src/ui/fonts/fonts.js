@@ -17,7 +17,7 @@ import { DEFAULT_WARP } from '../../core/warp.js';
 import { drawGlyphOnGuides, css } from './glyphview.js';
 import { openImporter, charFromFilename } from './importer.js';
 import { decodeImage, fontToZip, fontFromZipBytes, saveFile, safeName } from '../../storage/files.js';
-import { FACE_PRESETS, dominantHue, paletteFromStops, resolvePalette, remapPalette, colorMemo } from '../../core/recolor.js';
+import { FACE_PRESETS, dominantHue, paletteFromStops, resolvePalette, remapPalette, colorMemo, toneZones, toneTable, applyTones, tonesFromStops, deepShade } from '../../core/recolor.js';
 import { saveFontRecord, deleteFontRecord } from '../../storage/library.js';
 import { drawSample } from '../sample.js';
 import { undoToast } from '../undotoast.js';
@@ -169,8 +169,17 @@ export function mountFonts({ left, right, center, exportSlot }) {
 
   // ---------- recolour ----------
   function buildRecolor() {
-    // face mode recolours only the letter face (one colour range) and keeps a 3D base, outline and highlights
-    let mode = 'face', hue = 160, sat = 0, light = 0;
+    // tones (the default) strips the letters to black and white and colours their shadows, main tone and
+    // highlights; face recolours by colour bands (the face, its rim and the 3D depth); hue and gradient map are plain
+    let mode = 'tones', hue = 160, sat = 0, light = 0;
+    let tonePreset = FACE_PRESETS[0], toneBase = 'end', balance = 0, shine = true, toneCustom = false;
+    let tones = tonesFromStops(tonePreset.stops, toneBase);
+    let toneCache = null;
+    const toneLut = (f) => {
+      const zones = toneZones(f), key = JSON.stringify([f.id, f.rev, tones, balance, shine]);
+      if (!toneCache || toneCache.key !== key) toneCache = { key, lut: toneTable(tones, zones, { balance, shine }) };
+      return toneCache.lut;
+    };
     const MAP_STOPS = [{ pos: 0, color: '#3a0a5c' }, { pos: 0.55, color: '#ff4fa3' }, { pos: 1, color: '#fff3b0' }];
     let stops = MAP_STOPS.map((x) => ({ ...x }));
     let face = { hue: 205, width: 38, soft: 30 };
@@ -248,16 +257,35 @@ export function mountFonts({ left, right, center, exportSlot }) {
       if (!f) return;
       const text = tileText(f);
       for (const x of set.tiles) {
-        const anchors = resolvePalette(f, paletteOf(x.pr), face.hue);
-        withRecolored(f, text, (img, memo) => { const o = cloneImage(img); remapPalette(o.data, face.hue, anchors, memo); return o; },
-          (id) => drawSample(x.c, text || ' ', { fontId: id, height: set.height, maxWidth: 150 }), 100);
+        let fn;
+        if (mode !== 'face') {
+          const lut = toneTable(tonesFromStops(x.pr.stops, toneBase || 'end'), toneZones(f), { balance, shine });
+          fn = (img) => { const o = cloneImage(img); applyTones(o.data, lut); return o; };
+        } else {
+          const anchors = resolvePalette(f, paletteOf(x.pr), face.hue);
+          fn = (img, memo) => { const o = cloneImage(img); remapPalette(o.data, face.hue, anchors, memo); return o; };
+        }
+        withRecolored(f, text, fn, (id) => drawSample(x.c, text || ' ', { fontId: id, height: set.height, maxWidth: 150 }), 100);
       }
     };
-    const syncTiles = () => { for (const s of tileSets) for (const x of s.tiles) x.b.classList.toggle('on', mode === 'face' && !!palette && t(x.pr.name) === presetName); };
+    const syncTiles = () => {
+      for (const s of tileSets) for (const x of s.tiles) {
+        x.b.classList.toggle('on', mode === 'tones' ? !toneCustom && x.pr === tonePreset : mode === 'face' && !!palette && t(x.pr.name) === presetName);
+      }
+    };
     const pickPreset = (pr) => {
-      faceStops = pr.stops.map((x) => ({ ...x })); presetName = t(pr.name); palette = paletteOf(pr);
+      presetName = t(pr.name);
+      if (mode === 'tones') {
+        tonePreset = pr; toneCustom = false;
+        if (!toneBase) { toneBase = 'end'; baseP.setValue('end'); }
+        setTones(tonesFromStops(pr.stops, toneBase), false);
+        return;
+      }
+      faceStops = pr.stops.map((x) => ({ ...x })); palette = paletteOf(pr);
       faceGrad.setValue(faceStops); syncTiles(); syncFace(); redraw();
     };
+    // the tiles show each preset the way the current mode would apply it
+    const retile = rafThrottle(() => { drawTiles(panelTiles); if (editor) drawTiles(editorTiles); });
 
     const faceHue = numberField({ label: t('Face colour'), iconName: 'pipette', min: 0, max: 360, unit: '°', slider: true, value: face.hue, title: t('The colour of the letter face to replace'), onInput: (v) => { face.hue = v; swatch(); redraw(); }, onChange: () => {} });
     const faceWidth = numberField({ label: t('Range'), def: 38, min: 5, max: 90, unit: '°', slider: true, value: face.width, title: t('How far from that colour still counts as the face'), onInput: (v) => { face.width = v; redraw(); }, onChange: () => {} });
@@ -266,20 +294,45 @@ export function mountFonts({ left, right, center, exportSlot }) {
     const swatch = () => { hueSw.style.background = `hsl(${face.hue}, 90%, 50%)`; };
     const setFaceHue = (v) => { face.hue = v; faceHue.setValue(v); swatch(); };
     const detectBtn = button({ label: t('Find face colour'), icon: 'wand', onClick: () => { const f = currentFont(); if (f) { setFaceHue(dominantHue(f)); redraw(); } } });
-    const editorTiles = presetTiles(40, pickPreset);
-    const faceBox = h('div.cv-group', h('div.cv-label', t('Presets')), editorTiles.el, faceGrad,
+    const editorTiles = presetTiles(30, pickPreset);
+    const presetsBox = h('div.cv-group', h('div.cv-label', t('Presets')), editorTiles.el);
+    const faceBox = h('div.cv-group', faceGrad,
       h('div.row', hueSw, h('div', { style: { flex: 1 } }, faceHue)), faceWidth, faceSoft, detectBtn);
+    // tones: the three colours, where the shadows come from, the balance between them, and the shine
+    const setTones = (patch, custom = true) => {
+      Object.assign(tones, patch);
+      if (custom) { toneCustom = true; presetName = t('Custom'); }
+      hiF.setValue(tones.highlights); mainF.setValue(tones.main); shF.setValue(tones.shadows);
+      syncTiles(); redraw();
+    };
+    const hiF = colorField({ label: t('Highlights'), value: tones.highlights, onInput: (v) => setTones({ highlights: v }), onChange: () => {} });
+    const mainF = colorField({ label: t('Main'), value: tones.main, onInput: (v) => setTones(toneBase === 'main' ? { main: v, shadows: deepShade(v) } : { main: v }), onChange: () => {} });
+    const shF = colorField({ label: t('Shadows'), value: tones.shadows, onInput: (v) => { toneBase = null; baseP.setValue(null); setTones({ shadows: v }); }, onChange: () => {} });
+    const baseP = pills({
+      class: 'stretch', value: toneBase, options: [{ value: 'end', label: t('Gradient’s end'), title: t('The shadows take the darkest colour of the preset') }, { value: 'main', label: t('Main colour'), title: t('The shadows are a deeper shade of the main colour') }],
+      onChange: (v) => { toneBase = v; setTones({ shadows: v === 'main' ? deepShade(tones.main) : tonesFromStops(tonePreset.stops, 'end').shadows }, false); retile(); },
+    });
+    const balF = numberField({ label: t('Balance'), iconName: 'contrast', def: 0, min: -100, max: 100, unit: '%', slider: true, value: 0, title: t('Move the main colour toward the shadows or the highlights'), onInput: (v) => { balance = v / 100; redraw(); retile(); }, onChange: () => {} });
+    const shineT = toggle({ label: t('Keep white shine'), value: shine, onChange: (v) => { shine = v; redraw(); retile(); } });
+    const toneBox = h('div.cv-group', h('div.cv-label', t('Colours')), hiF, mainF, shF, h('div.cv-label', t('Shadows from')), baseP, balF, shineT,
+      h('p.hint', t('The letters are turned to black and white, then their shadows, main tone and highlights are coloured. Any font comes out the same way.')));
     // range and softness pick the face for a custom gradient; a preset covers the whole design
     const syncFace = () => { for (const x of [faceWidth, faceSoft]) x.style.display = palette ? 'none' : ''; };
-    const modeP = pills({ class: 'stretch', value: mode, options: [{ value: 'face', label: t('Face'), title: t('Face colour') }, { value: 'hsl', label: t('Hue'), title: t('Shift hue') }, { value: 'map', label: t('Gradient'), title: t('Gradient map') }], onChange: (v) => { mode = v; sync(); syncTiles(); redraw(); } });
+    const modeP = pills({ class: 'stretch', value: mode, options: [{ value: 'tones', label: t('Tones'), title: t('Black and white, then colour the shadows, main tone and highlights') }, { value: 'face', label: t('Face'), title: t('Face colour') }, { value: 'hsl', label: t('Hue'), title: t('Shift hue') }, { value: 'map', label: t('Gradient'), title: t('Gradient map') }], onChange: (v) => {
+      const was = mode; mode = v; sync(); syncTiles(); redraw();
+      if ((was === 'face') !== (v === 'face')) retile();
+    } });
     const sync = () => {
       for (const x of [hueF, satF, lightF]) x.style.display = mode === 'hsl' ? '' : 'none';
       grad.style.display = mode === 'map' ? '' : 'none';
       faceBox.style.display = mode === 'face' ? '' : 'none';
+      toneBox.style.display = mode === 'tones' ? '' : 'none';
+      presetsBox.style.display = mode === 'tones' || mode === 'face' ? '' : 'none';
     };
     const recolor = (img, memo) => {
       const out = cloneImage(img);
-      if (mode === 'face' && palette) remapPalette(out.data, face.hue, anchorsFor(currentFont()), memo);
+      if (mode === 'tones') applyTones(out.data, toneLut(currentFont()));
+      else if (mode === 'face' && palette) remapPalette(out.data, face.hue, anchorsFor(currentFont()), memo);
       else if (mode === 'face') recolorRange(out.data, face, faceStops.map((x) => ({ pos: x.pos, color: hexToRgb(x.color), opacity: x.opacity })));
       else if (mode === 'hsl') adjustHsl(out.data, hue, sat / 100, light / 100);
       else gradientMap(out.data, stops.map((x) => ({ pos: x.pos, color: hexToRgb(x.color), opacity: x.opacity })), 1);
@@ -290,13 +343,14 @@ export function mountFonts({ left, right, center, exportSlot }) {
       if (!f) return;
       let target = f;
       if (asNew) {
-        const suffix = mode === 'face' ? presetName : mode === 'hsl' ? t('Hue') + ' ' + hue : t('Gradient');
+        const suffix = mode === 'tones' || mode === 'face' ? presetName : mode === 'hsl' ? t('Hue') + ' ' + hue : t('Gradient');
         const name = await promptDialog(t('New colour variant'), t('Font name'), `${f.family || f.name} ${suffix}`);
         if (!name) return;
         target = cloneFont(f, name);
         target.family = f.family || f.name;
       } else checkpoint('font:' + f.id, 'Recolour font');
       if (mode === 'face' && palette) anchorsFor(f); // measure on the source font before the copy changes
+      if (mode === 'tones') toneLut(f); // the tonal range of the source font, before the copy changes
       for (const g of target.glyphs.values()) if (g.image) { g.image = recolor(g.image); g.rev++; }
       touch(target);
       if (asNew) { addFont(target); saveFontRecord(target); toast(t('Created {name}', { name: target.name }), 'ok'); }
@@ -344,7 +398,7 @@ export function mountFonts({ left, right, center, exportSlot }) {
       };
       const m = modal({
         title: `${t('Colour variants')} · ${f0.name}`, iconName: 'palette', class: 'modal-cv',
-        body: [h('div.cv-preview', h('div.cv-bar', text, cmp, bgP), stage), h('div.cv-controls', modeP, faceBox, hueF, satF, lightF, grad)],
+        body: [h('div.cv-preview', h('div.cv-bar', text, cmp, bgP), stage), h('div.cv-controls', modeP, presetsBox, toneBox, faceBox, hueF, satF, lightF, grad)],
         actions: [
           button({ label: t('Close'), onClick: () => m.close() }),
           button({ label: t('Apply to this font'), icon: 'brush', onClick: () => { m.close(); make(false); } }),
@@ -359,7 +413,10 @@ export function mountFonts({ left, right, center, exportSlot }) {
 
     // back to how the panel opens: Face colour with the first preset, measured on the current font
     const resetRecolor = () => {
-      mode = 'face'; hue = 160; sat = 0; light = 0;
+      mode = 'tones'; hue = 160; sat = 0; light = 0;
+      tonePreset = FACE_PRESETS[0]; toneBase = 'end'; balance = 0; shine = true; toneCustom = false;
+      tones = tonesFromStops(tonePreset.stops, toneBase);
+      hiF.setValue(tones.highlights); mainF.setValue(tones.main); shF.setValue(tones.shadows); baseP.setValue('end'); balF.setValue(0); shineT.setValue?.(true);
       stops = MAP_STOPS.map((x) => ({ ...x }));
       const pr = FACE_PRESETS[0];
       faceStops = pr.stops.map((x) => ({ ...x })); presetName = t(pr.name); palette = paletteOf(pr);
@@ -371,7 +428,7 @@ export function mountFonts({ left, right, center, exportSlot }) {
     };
     openColourEditor = openEditor;
     // the panel: the presets on this font, and the way into the editor
-    const panelTiles = presetTiles(30, (pr) => { mode = 'face'; modeP.setValue(mode); sync(); pickPreset(pr); openEditor(); });
+    const panelTiles = presetTiles(30, (pr) => { if (mode !== 'face') mode = 'tones'; modeP.setValue(mode); sync(); pickPreset(pr); openEditor(); });
     sync(); swatch(); syncFace(); syncTiles();
     let lastFontId = null;
     const fontSwitched = () => { const f = currentFont(); if (f && f.id !== lastFontId) { lastFontId = f.id; setFaceHue(dominantHue(f)); } };

@@ -348,3 +348,23 @@ test('prompt gradients are colour-variant presets, dark to light', async () => {
     assert.ok(luma(p.stops[0].color) <= luma(p.stops[p.stops.length - 1].color), g.name + ' runs dark to light');
   }
 });
+
+test('tones: black and white, then shadows, main and highlights from the font’s own range', async () => {
+  const { toneTable, applyTones, tonesFromStops, deepShade } = await import('../src/core/recolor.js');
+  const tones = { shadows: '#400000', main: '#00c000', highlights: '#0000ff' };
+  const zones = { shadows: 0.2, main: 0.5, highlights: 0.9 };
+  const lut = toneTable(tones, zones, { shine: true });
+  const px = (r, g, b) => [...applyTones(new Uint8ClampedArray([r, g, b, 255]), lut).slice(0, 3)];
+  const grey = (y) => Math.round(y * 255);
+  const near = (a, b, m) => assert.ok(a.every((v, i) => Math.abs(v - b[i]) <= 3), `${m}: ${a} vs ${b}`);
+  near(px(grey(0.5), grey(0.5), grey(0.5)), [0, 192, 0], 'the middle of the range is the main colour');
+  near(px(grey(0.2), grey(0.2), grey(0.2)), [64, 0, 0], 'the darkest tenth is the shadow colour');
+  assert.deepEqual(px(255, 255, 255), [255, 255, 255], 'the brightest glint stays white with shine');
+  // any colour of the same brightness comes out the same: the original hue is gone
+  const a = px(255, 0, 255), b = px(Math.round(0.2126 * 255 + 0.0722 * 255), Math.round(0.2126 * 255 + 0.0722 * 255), Math.round(0.2126 * 255 + 0.0722 * 255));
+  assert.ok(a.every((v, i) => Math.abs(v - b[i]) <= 3), 'magenta and a grey of its brightness get the same tone');
+  const t1 = tonesFromStops([{ pos: 0, color: '#f6d862' }, { pos: 1, color: '#eb7c9a' }], 'end');
+  assert.equal(t1.highlights, '#f6d862', 'the lighter end is the highlights');
+  const t2 = tonesFromStops([{ pos: 0, color: '#f6d862' }, { pos: 1, color: '#eb7c9a' }], 'main');
+  assert.equal(t2.shadows, deepShade(t2.main), 'base from the main colour: a deeper shade of it');
+});
